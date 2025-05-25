@@ -86,5 +86,7 @@ passman rm github
 - **No Plaintext Storage**: Passwords are never stored in plaintext
 
 ## License
+![Visitor Count](https://komarev.com/ghpvc/?username=0M3REXE&repo=your-repo&style=for-the-badge&color=brightgreen)
+
 
 This project is licensed under the MIT License.
