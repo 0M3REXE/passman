@@ -3,7 +3,9 @@ mod crypto;
 mod vault;
 mod model;
 mod utils;
+mod gui;
 
+use eframe::egui;
 use cli::{Cli, Commands};
 use model::Entry;
 use vault::VaultManager;
@@ -11,53 +13,50 @@ use utils::*;
 use clap::Parser;
 use std::error::Error;
 
-fn main() {
+fn main() -> Result<(), eframe::Error> {
+    // Check if CLI arguments are provided
+    let args: Vec<String> = std::env::args().collect();
+    
+    if args.len() > 1 {
+        // Run CLI mode for backward compatibility
+        run_cli();
+        return Ok(());
+    }
+
+    // Run GUI mode
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([800.0, 600.0])
+            .with_min_inner_size([600.0, 400.0])
+            .with_title("Passman - Password Manager")
+            .with_icon(eframe::icon_data::from_png_bytes(&[]).unwrap_or_default()),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "Passman",
+        options,
+        Box::new(|cc| Ok(Box::new(gui::PassmanApp::new(cc)))),
+    )
+}
+
+fn run_cli() {
     let cli = Cli::parse();
     let vault_file = cli.vault.as_deref();
 
-    match cli.command {
-        Commands::Init => {
-            if let Err(e) = handle_init(vault_file) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::Add { id } => {
-            if let Err(e) = handle_add(&id, vault_file) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::Get { id } => {
-            if let Err(e) = handle_get(&id, vault_file) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::List => {
-            if let Err(e) = handle_list(vault_file) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::Remove { id } => {
-            if let Err(e) = handle_remove(&id, vault_file) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::Check { password } => {
-            if let Err(e) = handle_check(password.as_deref()) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::Vaults => {
-            if let Err(e) = handle_vaults() {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
+    let result = match cli.command {
+        Commands::Init => handle_init(vault_file),
+        Commands::Add { id } => handle_add(&id, vault_file),
+        Commands::Get { id } => handle_get(&id, vault_file),
+        Commands::List => handle_list(vault_file),
+        Commands::Remove { id } => handle_remove(&id, vault_file),
+        Commands::Check { password } => handle_check(password.as_deref()),
+        Commands::Vaults => handle_vaults(),
+    };
+
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
     }
 }
 

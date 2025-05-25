@@ -1,13 +1,17 @@
 # Passman - A Secure Password Manager
 
-A command-line password manager written in Rust with AES-256-GCM encryption and Argon2 key derivation.
+A modern password manager written in Rust with both GUI and CLI interfaces, featuring AES-256-GCM encryption and Argon2 key derivation.
 
 ## Features
 
-- **Secure Encryption**: Uses AES-256-GCM for encryption with Argon2 for key derivation
-- **CLI Interface**: Simple command-line interface for managing passwords
-- **Password Generation**: Built-in secure password generator
+- **Dual Interface**: Modern GUI and powerful CLI interface
+- **Secure Encryption**: Uses AES-256-GCM for encryption with Argon2 key derivation
+- **Password Generation**: Built-in secure password generator with customizable length
+- **Password Strength Analysis**: Real-time password strength analysis with suggestions
+- **Multiple Vaults**: Support for multiple vault files
+- **Clipboard Integration**: Secure clipboard operations for passwords
 - **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Zero Dependencies**: Self-contained executable with no external dependencies
 
 ## Installation
 
@@ -25,6 +29,24 @@ cargo build --release
 3. The executable will be available at `target/release/passman.exe` (Windows) or `target/release/passman` (Unix)
 
 ## Usage
+
+### GUI Mode (Default)
+Simply run the executable without arguments to launch the GUI:
+```bash
+./passman
+```
+
+The GUI provides:
+- **Welcome Screen**: Choose to create new vault or login to existing
+- **Vault Management**: Create and manage multiple vault files
+- **Password Management**: Add, edit, view, and delete password entries
+- **Password Generator**: Generate secure passwords with customizable settings
+- **Search & Filter**: Quickly find entries with real-time search
+- **Clipboard Integration**: One-click copying of passwords
+- **Password Visibility**: Toggle password visibility with eye icons
+
+### CLI Mode
+Pass any command-line argument to use CLI mode:
 
 ### Initialize Vault
 Set up a master password and create an encrypted vault:

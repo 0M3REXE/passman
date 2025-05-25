@@ -21,15 +21,13 @@ impl VaultManager {
         
         if Path::new(vault_path).exists() {
             return Err(format!("Vault '{}' already exists! Remove it to reset.", vault_path).into());
-        }
-
-        let salt = SaltString::generate(&mut rand::thread_rng());
-        let key = derive_key(master_password, &salt);
+        }        let salt = SaltString::generate(&mut rand::thread_rng());
+        let key = derive_key(master_password, &salt)?;
 
         let vault = Vault::new();
         let serialized = serde_json::to_vec(&vault)?;
 
-        let (ciphertext, nonce) = encrypt_data(&key, &serialized);
+        let (ciphertext, nonce) = encrypt_data(&key, &serialized)?;
 
         // Save: [salt_len][salt][nonce][ciphertext]
         let mut file = File::create(vault_path)?;
@@ -71,11 +69,9 @@ impl VaultManager {
         offset += 12;
 
         // Read ciphertext (rest of the file)
-        let ciphertext = &buffer[offset..];
-
-        // Derive key and decrypt
-        let key = derive_key(master_password, &salt);
-        let plaintext = decrypt_data(&key, ciphertext, &nonce);
+        let ciphertext = &buffer[offset..];        // Derive key and decrypt
+        let key = derive_key(master_password, &salt)?;
+        let plaintext = decrypt_data(&key, ciphertext, &nonce)?;
         
         let vault: Vault = serde_json::from_slice(&plaintext)?;
         Ok(vault)
@@ -97,14 +93,12 @@ impl VaultManager {
         ]) as usize;
         offset += 4;        // Read salt
         let salt_str = std::str::from_utf8(&buffer[offset..offset + salt_len])?;
-        let salt = SaltString::from_b64(salt_str).map_err(|e| format!("Salt parsing error: {}", e))?;
-
-        // Derive key
-        let key = derive_key(master_password, &salt);
+        let salt = SaltString::from_b64(salt_str).map_err(|e| format!("Salt parsing error: {}", e))?;        // Derive key
+        let key = derive_key(master_password, &salt)?;
 
         // Serialize and encrypt vault
         let serialized = serde_json::to_vec(vault)?;
-        let (ciphertext, nonce) = encrypt_data(&key, &serialized);
+        let (ciphertext, nonce) = encrypt_data(&key, &serialized)?;
 
         // Write back to file
         let mut file = File::create(vault_path)?;
