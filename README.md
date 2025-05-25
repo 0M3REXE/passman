@@ -1,3 +1,12 @@
+
+  _____                                    
+ |  __ \                                   
+ | |__) |_ _ ___ ___ _ __ ___   __ _ _ __  
+ |  ___/ _` / __/ __| '_ ` _ \ / _` | '_ \ 
+ | |  | (_| \__ \__ \ | | | | | (_| | | | |
+ |_|   \__,_|___/___/_| |_| |_|\__,_|_| |_|
+                                           
+                                           
 # Passman - A Secure Password Manager
 
 A modern password manager written in Rust with both GUI and CLI interfaces, featuring AES-256-GCM encryption and Argon2 key derivation.
