@@ -361,18 +361,21 @@ impl PassmanApp {
                 }
             }
             ui.add_space(SPACING);
-            if self.secondary_button(ui, "Settings", [100.0, BUTTON_HEIGHT]).clicked() {
+            if self.secondary_button(ui, "Settings", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width for consistency
                 self.current_screen = Screen::Settings;
             }
         });
     }
 
     fn show_init_screen(&mut self, ui: &mut egui::Ui) {
-        ui.vertical_centered(|ui| {
-            ui.add_space(50.0);
-            
+        ui.vertical(|ui| {
             ui.heading("Create New Vault");
-            ui.add_space(SPACING * 2.0);
+        });
+        ui.separator();
+        ui.add_space(PADDING);
+
+        ui.vertical_centered(|ui| {
+            ui.add_space(SPACING * 2.0); // Adjusted top spacing
 
             ui.horizontal(|ui| {
                 ui.label("Master Password:");
@@ -388,25 +391,25 @@ impl PassmanApp {
                     .password(true)
                     .desired_width(INPUT_WIDTH));
             });
-            ui.add_space(SPACING * 2.0);            ui.horizontal(|ui| {
-                if self.success_button(ui, "Create", [100.0, BUTTON_HEIGHT]).clicked() {
-                    match self.init_vault() {
-                        Ok(()) => {
-                            self.show_message("Vault created successfully!".to_string(), MessageType::Success);
-                        }
-                        Err(e) => {
-                            self.show_message(e, MessageType::Error);
-                        }
+            ui.add_space(SPACING * 2.0);
+            
+            if self.success_button(ui, "Create", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                match self.init_vault() {
+                    Ok(()) => {
+                        self.show_message("Vault created successfully!".to_string(), MessageType::Success);
+                    }
+                    Err(e) => {
+                        self.show_message(e, MessageType::Error);
                     }
                 }
-                
-                if self.secondary_button(ui, "Cancel", [100.0, BUTTON_HEIGHT]).clicked() {
-                    self.current_screen = Screen::Welcome;
-                    self.init_password.clear();
-                    self.init_confirm.clear();
-                    self.clear_message();
-                }
-            });
+            }
+            ui.add_space(SPACING); // Space between stacked buttons
+            if self.secondary_button(ui, "Cancel", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                self.current_screen = Screen::Welcome;
+                self.init_password.clear();
+                self.init_confirm.clear();
+                self.clear_message();
+            }
         });
     }
 
@@ -426,23 +429,24 @@ impl PassmanApp {
                     .password(true)
                     .desired_width(INPUT_WIDTH));
             });
-            ui.add_space(SPACING * 2.0);            ui.horizontal(|ui| {
-                if self.primary_button(ui, "Open", [100.0, BUTTON_HEIGHT]).clicked() {
-                    match self.login() {
-                        Ok(()) => {
-                            self.show_message("Vault opened successfully!".to_string(), MessageType::Success);
-                        }
-                        Err(e) => {
-                            self.show_message(e, MessageType::Error);
-                        }
+            ui.add_space(SPACING * 2.0);
+            
+            if self.primary_button(ui, "Open", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                match self.login() {
+                    Ok(()) => {
+                        self.show_message("Vault opened successfully!".to_string(), MessageType::Success);
+                    }
+                    Err(e) => {
+                        self.show_message(e, MessageType::Error);
                     }
                 }
-                  if self.secondary_button(ui, "Cancel", [100.0, BUTTON_HEIGHT]).clicked() {
-                    self.current_screen = Screen::Welcome;
-                    self.login_password.clear();
-                    self.clear_message();
-                }
-            });
+            }
+            ui.add_space(SPACING); // Space between stacked buttons
+            if self.secondary_button(ui, "Cancel", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                self.current_screen = Screen::Welcome;
+                self.login_password.clear();
+                self.clear_message();
+            }
         });
     }
 
@@ -551,11 +555,14 @@ impl PassmanApp {
     }
 
     fn show_add_entry_screen(&mut self, ui: &mut egui::Ui) {
-        ui.vertical_centered(|ui| {
-            ui.add_space(30.0); // Consistent top spacing
-            
+        ui.vertical(|ui| {
             ui.heading("Add New Entry");
-            ui.add_space(SPACING * 2.0);
+        });
+        ui.separator();
+        ui.add_space(PADDING);
+        
+        ui.vertical_centered(|ui| {
+            ui.add_space(SPACING * 2.0); // Consistent top spacing after header
 
             // Use a grid layout for aligned labels and input fields
             egui::Grid::new("add_entry_grid")
@@ -620,47 +627,54 @@ impl PassmanApp {
                     ui.end_row();
                 });
 
-            ui.add_space(SPACING * 2.0);            ui.horizontal(|ui| {
-                if self.success_button(ui, "Add Entry", [100.0, BUTTON_HEIGHT]).clicked() {
-                    match self.add_entry() {
-                        Ok(()) => {
-                            self.show_message("Entry added successfully!".to_string(), MessageType::Success);
-                        }
-                        Err(e) => {
-                            self.show_message(e, MessageType::Error);
-                        }
+            ui.add_space(SPACING * 2.0);
+            
+            if self.success_button(ui, "Add Entry", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                match self.add_entry() {
+                    Ok(()) => {
+                        self.show_message("Entry added successfully!".to_string(), MessageType::Success);
+                    }
+                    Err(e) => {
+                        self.show_message(e, MessageType::Error);
                     }
                 }
-                
-                if self.secondary_button(ui, "Cancel", [100.0, BUTTON_HEIGHT]).clicked() {
-                    self.current_screen = Screen::Main;
-                    self.clear_add_form();
-                }
-            });
+            }
+            ui.add_space(SPACING); // Space between stacked buttons
+            if self.secondary_button(ui, "Cancel", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                self.current_screen = Screen::Main;
+                self.clear_add_form();
+            }
         });
     }
 
     fn show_edit_entry_screen(&mut self, ui: &mut egui::Ui, id: &str) {
-        ui.vertical_centered(|ui| {
-            ui.add_space(50.0);
-            
+        ui.vertical(|ui| {
             ui.heading(format!("Edit Entry: {}", id));
-            ui.add_space(SPACING * 2.0);
+        });
+        ui.separator();
+        ui.add_space(PADDING);
 
+        ui.vertical_centered(|ui| {
+            ui.add_space(SPACING * 2.0); // Adjusted top spacing
+            
             ui.label("Edit functionality coming soon...");
-            ui.add_space(SPACING * 2.0);            if self.secondary_button(ui, "Back", [100.0, BUTTON_HEIGHT]).clicked() {
+            ui.add_space(SPACING * 2.0);
+            if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
                 self.current_screen = Screen::Main;
             }
         });
     }
 
     fn show_settings_screen(&mut self, ui: &mut egui::Ui) {
-        ui.vertical_centered(|ui| {
-            ui.add_space(50.0);
-            
+        ui.vertical(|ui| {
             ui.heading("Settings");
-            ui.add_space(SPACING * 2.0);
+        });
+        ui.separator();
+        ui.add_space(PADDING);
 
+        ui.vertical_centered(|ui| {
+            ui.add_space(SPACING * 2.0); // Adjusted top spacing
+            
             ui.horizontal(|ui| {
                 ui.label("Vault file:");
                 ui.add(egui::TextEdit::singleline(&mut self.vault_file)
@@ -669,16 +683,38 @@ impl PassmanApp {
             ui.add_space(SPACING);
 
             ui.label("Available vault files:");
-            if let Ok(vaults) = VaultManager::list_vaults() {
-                for vault in vaults {                    ui.horizontal(|ui| {
-                        ui.label(&vault);
-                        if self.primary_button(ui, "Select", [60.0, 25.0]).clicked() {
-                            self.vault_file = vault;
+            // Use a ScrollArea if the list of vaults can be long
+            egui::ScrollArea::vertical().max_height(100.0).show(ui, |ui| {
+                if let Ok(vaults) = VaultManager::list_vaults() {
+                    if vaults.is_empty() {
+                        ui.label("No other vault files found in this directory.");
+                    } else {
+                        for vault_filename in vaults {
+                            // Ensure we don't list the currently active vault_file as an option to "select" again if it's already the one.
+                            // Or, visually indicate which one is active. For simplicity, just list them.
+                            ui.horizontal(|ui| {
+                                ui.label(&vault_filename);
+                                // Make the button smaller and perhaps only show if it's not the current vault_file
+                                if self.vault_file != vault_filename {
+                                    if self.primary_button(ui, "Select", [80.0, 28.0]).clicked() {
+                                        self.vault_file = vault_filename.clone();
+                                        // Optionally, provide feedback or auto-navigate
+                                        self.show_message(format!("Vault file set to '{}'. Please reopen.", self.vault_file), MessageType::Info);
+                                        self.current_screen = Screen::Welcome; // Go to welcome to reopen or reinit
+                                    }
+                                } else {
+                                    ui.label("(current)");
+                                }
+                            });
                         }
-                    });
+                    }
+                } else {
+                    ui.label("Could not read vault files.");
                 }
-            }
-            ui.add_space(SPACING * 2.0);            if self.secondary_button(ui, "Back", [100.0, BUTTON_HEIGHT]).clicked() {
+            });
+            ui.add_space(SPACING * 2.0);
+            
+            if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
                 self.current_screen = Screen::Welcome;
             }
         });
