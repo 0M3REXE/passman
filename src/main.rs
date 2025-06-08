@@ -12,6 +12,7 @@ use vault::VaultManager;
 use utils::*;
 use clap::Parser;
 use std::error::Error;
+use zeroize::Zeroizing;
 
 fn main() -> Result<(), eframe::Error> {
     // Check if CLI arguments are provided
@@ -68,7 +69,7 @@ fn handle_init(vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
     let master_password = read_password_secure("Create a master password: ")?;
     let confirm_password = read_password_secure("Confirm master password: ")?;
 
-    if master_password != confirm_password {
+    if master_password.as_str() != confirm_password.as_str() {
         return Err("Passwords do not match!".into());
     }
 
@@ -109,7 +110,7 @@ fn handle_add(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> 
                 println!("  • {}", suggestion);
             }
         }
-        pwd
+        pwd.to_string()
     };
 
     let note_input = read_line_optional("Note (optional): ")?;
@@ -186,7 +187,7 @@ fn handle_remove(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error
 
 fn handle_check(password: Option<&str>) -> Result<(), Box<dyn Error>> {
     let pwd = match password {
-        Some(p) => p.to_string(),
+        Some(p) => Zeroizing::new(p.to_string()),
         None => read_password_secure("Enter password to analyze: ")?,
     };
 

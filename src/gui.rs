@@ -3,6 +3,7 @@ use crate::model::{Entry, Vault};
 use crate::vault::VaultManager;
 use crate::utils::*;
 use std::collections::HashMap;
+use zeroize::Zeroizing;
 
 // Simple UI Constants
 const BUTTON_HEIGHT: f32 = 36.0;
@@ -16,16 +17,16 @@ pub struct PassmanApp {
     current_screen: Screen,
     vault: Option<Vault>,
     vault_file: String,
-    master_password: String,
+    master_password: Zeroizing<String>,
     
     // UI state
     show_password: HashMap<String, bool>,
     entries: Vec<(String, Entry)>,
     
     // Form fields
-    init_password: String,
-    init_confirm: String,
-    login_password: String,
+    init_password: Zeroizing<String>,
+    init_confirm: Zeroizing<String>,
+    login_password: Zeroizing<String>,
     add_id: String,
     add_username: String,
     add_password: String,
@@ -118,11 +119,13 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         
         // Apply the initial style (which includes visuals, spacing, etc.)
         // cc.egui_ctx.set_visuals(style.visuals.clone()); // Redundant if set_style is called with the same style object
-        cc.egui_ctx.set_style(style);
-
-        Self {
+        cc.egui_ctx.set_style(style);        Self {
             vault_file: "vault.dat".to_string(),
             password_length: 16,
+            master_password: Zeroizing::new(String::new()),
+            init_password: Zeroizing::new(String::new()),
+            init_confirm: Zeroizing::new(String::new()),
+            login_password: Zeroizing::new(String::new()),
             ..Default::default()
         }
     }
@@ -161,10 +164,8 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
                 })
                 .collect()
         }
-    }
-
-    fn init_vault(&mut self) -> Result<(), String> {
-        if self.init_password != self.init_confirm {
+    }    fn init_vault(&mut self) -> Result<(), String> {
+        if self.init_password.as_str() != self.init_confirm.as_str() {
             return Err("Passwords do not match!".into());
         }
 
@@ -175,25 +176,23 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         VaultManager::init(&self.init_password, Some(&self.vault_file))
             .map_err(|e| e.to_string())?;
 
-        self.master_password = self.init_password.clone();
+        *self.master_password = self.init_password.to_string();
         self.vault = Some(Vault::new());
         self.load_entries();
         self.current_screen = Screen::Main;
-        self.init_password.clear();
-        self.init_confirm.clear();
+        *self.init_password = String::new();
+        *self.init_confirm = String::new();
 
         Ok(())
-    }
-
-    fn login(&mut self) -> Result<(), String> {
+    }    fn login(&mut self) -> Result<(), String> {
         let vault = VaultManager::load(&self.login_password, Some(&self.vault_file))
             .map_err(|e| e.to_string())?;
 
-        self.master_password = self.login_password.clone();
+        *self.master_password = self.login_password.to_string();
         self.vault = Some(vault);
         self.load_entries();
         self.current_screen = Screen::Main;
-        self.login_password.clear();
+        *self.login_password = String::new();
 
         Ok(())
     }
@@ -289,21 +288,25 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
     }
 }
 
-impl eframe::App for PassmanApp {    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl eframe::App for PassmanApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Visuals are set in `PassmanApp::new`
         
         egui::CentralPanel::default()
             .frame(egui::Frame::none()
                 .inner_margin(PADDING)
                 .fill(egui::Color32::from_rgb(32, 33, 36)))
-            .show(ctx, |ui| {// Colorful message display
+            .show(ctx, |ui| {
+                // Colorful message display
                 if !self.message.is_empty() {
                     let color = match self.message_type {
                         MessageType::Success => egui::Color32::from_rgb(40, 167, 69),
                         MessageType::Error => egui::Color32::from_rgb(220, 53, 69),
                         MessageType::Info => egui::Color32::from_rgb(23, 162, 184),
                         MessageType::None => egui::Color32::from_rgb(108, 117, 125),
-                    };                    ui.horizontal(|ui| {
+                    };
+                    
+                    ui.horizontal(|ui| {
                         ui.colored_label(color, &self.message);
                         if self.secondary_button(ui, "×", [28.0, 28.0]).clicked() { // Adjusted size from [25.0, 25.0]
                             self.clear_message();
@@ -372,14 +375,12 @@ impl PassmanApp {
             ui.heading("Create New Vault");
         });
         ui.separator();
-        ui.add_space(PADDING);
-
-        ui.vertical_centered(|ui| {
+        ui.add_space(PADDING);        ui.vertical_centered(|ui| {
             ui.add_space(SPACING * 2.0); // Adjusted top spacing
-
+            
             ui.horizontal(|ui| {
                 ui.label("Master Password:");
-                ui.add(egui::TextEdit::singleline(&mut self.init_password)
+                ui.add(egui::TextEdit::singleline(&mut *self.init_password)
                     .password(true)
                     .desired_width(INPUT_WIDTH));
             });
@@ -387,7 +388,7 @@ impl PassmanApp {
 
             ui.horizontal(|ui| {
                 ui.label("Confirm Password:");
-                ui.add(egui::TextEdit::singleline(&mut self.init_confirm)
+                ui.add(egui::TextEdit::singleline(&mut *self.init_confirm)
                     .password(true)
                     .desired_width(INPUT_WIDTH));
             });
@@ -400,14 +401,14 @@ impl PassmanApp {
                     }
                     Err(e) => {
                         self.show_message(e, MessageType::Error);
-                    }
-                }
+                    }                }
             }
             ui.add_space(SPACING); // Space between stacked buttons
+            
             if self.secondary_button(ui, "Cancel", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
                 self.current_screen = Screen::Welcome;
-                self.init_password.clear();
-                self.init_confirm.clear();
+                *self.init_password = String::new();
+                *self.init_confirm = String::new();
                 self.clear_message();
             }
         });
@@ -419,13 +420,13 @@ impl PassmanApp {
         });
         ui.separator(); // Add a separator line
         ui.add_space(PADDING); // Add padding after the separator
-
+        
         ui.vertical_centered(|ui| { // Center the rest of the content
             ui.add_space(SPACING * 2.0); // Adjust top spacing as needed
-
+            
             ui.horizontal(|ui| {
                 ui.label("Master Password:");
-                ui.add(egui::TextEdit::singleline(&mut self.login_password)
+                ui.add(egui::TextEdit::singleline(&mut *self.login_password)
                     .password(true)
                     .desired_width(INPUT_WIDTH));
             });
@@ -442,10 +443,10 @@ impl PassmanApp {
                 }
             }
             ui.add_space(SPACING); // Space between stacked buttons
+            
             if self.secondary_button(ui, "Cancel", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
                 self.current_screen = Screen::Welcome;
-                self.login_password.clear();
-                self.clear_message();
+                *self.login_password = String::new();                self.clear_message();
             }
         });
     }
@@ -454,10 +455,11 @@ impl PassmanApp {
         // Simple header
         ui.horizontal(|ui| {
             ui.heading("Password Vault");
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {                if self.secondary_button(ui, "Lock", [60.0, 30.0]).clicked() {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if self.secondary_button(ui, "Lock", [60.0, 30.0]).clicked() {
                     self.current_screen = Screen::Welcome;
                     self.vault = None;
-                    self.master_password.clear();
+                    *self.master_password = String::new();
                     self.clear_message();
                 }
                 
@@ -526,7 +528,8 @@ impl PassmanApp {
                                 }
                             });
                             
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {                                if self.danger_button(ui, "Delete", [60.0, 30.0]).clicked() {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if self.danger_button(ui, "Delete", [60.0, 30.0]).clicked() {
                                     match self.remove_entry(id) {
                                         Ok(()) => {
                                             self.show_message(format!("Entry '{}' deleted", id), MessageType::Success);
@@ -534,9 +537,9 @@ impl PassmanApp {
                                         Err(e) => {
                                             self.show_message(e, MessageType::Error);
                                         }
-                                    }
-                                }
-                                  if self.primary_button(ui, "Copy", [60.0, 30.0]).clicked() {
+                                    }                                }
+                                
+                                if self.primary_button(ui, "Copy", [60.0, 30.0]).clicked() {
                                     ctx.output_mut(|o| o.copied_text = entry.password.clone());
                                     self.show_message(format!("Password for \'{}\' copied to clipboard!", id), MessageType::Info);
                                 }
@@ -547,9 +550,9 @@ impl PassmanApp {
                                     *current_shown_state = !*current_shown_state;
                                 }
                             });
-                        });
-                    });
-                    ui.add_space(SPACING);                }
+                        });                    });
+                    ui.add_space(SPACING);
+                }
             }
         });
     }

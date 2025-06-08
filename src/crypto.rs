@@ -2,8 +2,35 @@ use aes_gcm::{Aes256Gcm, KeyInit};
 use aes_gcm::aead::{Aead, generic_array::GenericArray};
 use argon2::{Argon2, password_hash::SaltString, PasswordHasher};
 use rand;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
-pub type Key = GenericArray<u8, typenum::U32>;
+/// Secure key wrapper that automatically zeroizes on drop
+#[derive(Clone, ZeroizeOnDrop)]
+pub struct Key(GenericArray<u8, typenum::U32>);
+
+impl Key {
+    pub fn new(data: GenericArray<u8, typenum::U32>) -> Self {
+        Self(data)
+    }
+    
+    pub fn as_ref(&self) -> &GenericArray<u8, typenum::U32> {
+        &self.0
+    }
+}
+
+impl AsRef<[u8]> for Key {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl std::ops::Deref for Key {
+    type Target = GenericArray<u8, typenum::U32>;
+    
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Debug)]
 pub enum CryptoError {
@@ -37,11 +64,16 @@ pub fn derive_key(password: &str, salt: &SaltString) -> Result<Key, CryptoError>
     let len = std::cmp::min(key_bytes.len(), 32);
     key_array[..len].copy_from_slice(&key_bytes[..len]);
     
-    Ok(*GenericArray::from_slice(&key_array))
+    let key = Key::new(*GenericArray::from_slice(&key_array));
+    
+    // Zeroize the temporary key_array
+    key_array.zeroize();
+    
+    Ok(key)
 }
 
 pub fn encrypt_data(key: &Key, plaintext: &[u8]) -> Result<(Vec<u8>, [u8; 12]), CryptoError> {
-    let cipher = Aes256Gcm::new(key);
+    let cipher = Aes256Gcm::new(key.as_ref());
     let nonce_bytes = rand::random::<[u8; 12]>();
     let nonce = GenericArray::from_slice(&nonce_bytes);
     let ciphertext = cipher.encrypt(nonce, plaintext)
@@ -50,7 +82,7 @@ pub fn encrypt_data(key: &Key, plaintext: &[u8]) -> Result<(Vec<u8>, [u8; 12]), 
 }
 
 pub fn decrypt_data(key: &Key, ciphertext: &[u8], nonce: &[u8; 12]) -> Result<Vec<u8>, CryptoError> {
-    let cipher = Aes256Gcm::new(key);
+    let cipher = Aes256Gcm::new(key.as_ref());
     let nonce = GenericArray::from_slice(nonce);
     cipher.decrypt(nonce, ciphertext)
         .map_err(|_e| CryptoError::Decryption("Invalid password or corrupted data".to_string()))

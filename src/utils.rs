@@ -3,6 +3,7 @@ use std::fs::File;
 use std::path::Path;
 use clipboard::{ClipboardProvider, ClipboardContext};
 use regex::Regex;
+use zeroize::Zeroizing;
 
 /// Copy text to clipboard with proper error handling
 pub fn copy_to_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -13,19 +14,19 @@ pub fn copy_to_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Read password securely from stdin
-pub fn read_password_secure(prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub fn read_password_secure(prompt: &str) -> Result<Zeroizing<String>, Box<dyn std::error::Error>> {
     print!("{}", prompt);
     io::stdout().flush()?;
     
     // Check if stdin is from a terminal (interactive) or piped
     let password = if atty::is(atty::Stream::Stdin) {
         // Interactive mode - use secure password reading
-        rpassword::read_password()?
+        Zeroizing::new(rpassword::read_password()?)
     } else {
         // Non-interactive mode (piped input) - read normally
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        input.trim().to_string()
+        Zeroizing::new(input.trim().to_string())
     };
     
     if password.trim().is_empty() {

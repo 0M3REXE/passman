@@ -4,6 +4,7 @@ use argon2::password_hash::SaltString;
 use std::fs::{File, read_dir};
 use std::io::{Write, Read};
 use std::path::Path;
+use zeroize::Zeroizing;
 
 const DEFAULT_VAULT_FILE: &str = "vault.dat";
 
@@ -13,16 +14,14 @@ impl VaultManager {
     /// Get the vault file path
     fn get_vault_path(vault_file: Option<&str>) -> &str {
         vault_file.unwrap_or(DEFAULT_VAULT_FILE)
-    }
-
-    /// Initialize a new encrypted vault with master password
-    pub fn init(master_password: &str, vault_file: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    }    /// Initialize a new encrypted vault with master password
+    pub fn init(master_password: &Zeroizing<String>, vault_file: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let vault_path = Self::get_vault_path(vault_file);
         
         if Path::new(vault_path).exists() {
             return Err(format!("Vault '{}' already exists! Remove it to reset.", vault_path).into());
         }        let salt = SaltString::generate(&mut rand::thread_rng());
-        let key = derive_key(master_password, &salt)?;
+        let key = derive_key(master_password.as_str(), &salt)?;
 
         let vault = Vault::new();
         let serialized = serde_json::to_vec(&vault)?;
@@ -38,10 +37,8 @@ impl VaultManager {
         file.write_all(&ciphertext)?;
 
         Ok(())
-    }
-
-    /// Load and decrypt vault with master password
-    pub fn load(master_password: &str, vault_file: Option<&str>) -> Result<Vault, Box<dyn std::error::Error>> {
+    }    /// Load and decrypt vault with master password
+    pub fn load(master_password: &Zeroizing<String>, vault_file: Option<&str>) -> Result<Vault, Box<dyn std::error::Error>> {
         let vault_path = Self::get_vault_path(vault_file);
           if !Path::new(vault_path).exists() {
             return Err(format!("Vault '{}' not found! Run 'passman init' first.", vault_path).into());
@@ -70,13 +67,13 @@ impl VaultManager {
 
         // Read ciphertext (rest of the file)
         let ciphertext = &buffer[offset..];        // Derive key and decrypt
-        let key = derive_key(master_password, &salt)?;
+        let key = derive_key(master_password.as_str(), &salt)?;
         let plaintext = decrypt_data(&key, ciphertext, &nonce)?;
         
         let vault: Vault = serde_json::from_slice(&plaintext)?;
         Ok(vault)
     }    /// Save encrypted vault
-    pub fn save(vault: &Vault, master_password: &str, vault_file: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save(vault: &Vault, master_password: &Zeroizing<String>, vault_file: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let vault_path = Self::get_vault_path(vault_file);
         
         // Read existing salt from file
@@ -94,7 +91,7 @@ impl VaultManager {
         offset += 4;        // Read salt
         let salt_str = std::str::from_utf8(&buffer[offset..offset + salt_len])?;
         let salt = SaltString::from_b64(salt_str).map_err(|e| format!("Salt parsing error: {}", e))?;        // Derive key
-        let key = derive_key(master_password, &salt)?;
+        let key = derive_key(master_password.as_str(), &salt)?;
 
         // Serialize and encrypt vault
         let serialized = serde_json::to_vec(vault)?;
