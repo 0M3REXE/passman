@@ -26,7 +26,7 @@ A modern password manager written in Rust with both GUI and CLI interfaces, feat
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/0M3REXE/passman
 cd passman
 ```
 
