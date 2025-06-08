@@ -4,6 +4,7 @@ use std::path::Path;
 use clipboard::{ClipboardProvider, ClipboardContext};
 use regex::Regex;
 use zeroize::Zeroizing;
+use crate::config::PasswordConfig;
 
 /// Copy text to clipboard with proper error handling
 pub fn copy_to_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -103,7 +104,7 @@ pub fn generate_password(length: usize) -> String {
 }
 
 /// Password strength levels
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PasswordStrength {
     VeryWeak,
     Weak,
@@ -188,4 +189,105 @@ pub fn analyze_password_strength(password: &str) -> (PasswordStrength, Vec<Strin
     };
     
     (strength, suggestions)
+}
+
+#[allow(dead_code)]
+pub fn generate_password_with_config(length: usize, config: &PasswordConfig) -> String {
+    use rand::Rng;
+    
+    let mut charset = Vec::new();
+    
+    if config.include_lowercase {
+        charset.extend_from_slice(b"abcdefghijklmnopqrstuvwxyz");
+    }
+    if config.include_uppercase {
+        charset.extend_from_slice(b"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    }
+    if config.include_numbers {
+        charset.extend_from_slice(b"0123456789");
+    }
+    if config.include_symbols {
+        charset.extend_from_slice(b"!@#$%^&*()_+-=[]{}|;:,.<>?");
+    }
+    
+    // Remove ambiguous characters if requested
+    if config.exclude_ambiguous {
+        charset.retain(|&c| !b"0O1lI".contains(&c));
+    }
+    
+    if charset.is_empty() {
+        charset.extend_from_slice(b"abcdefghijklmnopqrstuvwxyz"); // fallback
+    }
+    
+    let mut rng = rand::thread_rng();
+    let mut password = Vec::new();
+    
+    // Ensure at least one character from each enabled set
+    if config.include_lowercase && length > 0 {
+        let lowercase: Vec<u8> = b"abcdefghijklmnopqrstuvwxyz".iter()
+            .filter(|&&c| !config.exclude_ambiguous || !b"l".contains(&c))
+            .copied().collect();
+        if !lowercase.is_empty() {
+            password.push(lowercase[rng.gen_range(0..lowercase.len())]);
+        }
+    }
+    
+    if config.include_uppercase && length > 1 {
+        let uppercase: Vec<u8> = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ".iter()
+            .filter(|&&c| !config.exclude_ambiguous || !b"OI".contains(&c))
+            .copied().collect();
+        if !uppercase.is_empty() {
+            password.push(uppercase[rng.gen_range(0..uppercase.len())]);
+        }
+    }
+    
+    if config.include_numbers && length > 2 {
+        let numbers: Vec<u8> = b"0123456789".iter()
+            .filter(|&&c| !config.exclude_ambiguous || !b"01".contains(&c))
+            .copied().collect();
+        if !numbers.is_empty() {
+            password.push(numbers[rng.gen_range(0..numbers.len())]);
+        }
+    }
+    
+    if config.include_symbols && length > 3 {
+        password.push(b"!@#$%^&*"[rng.gen_range(0..8)]);
+    }
+    
+    // Fill remaining length
+    while password.len() < length {
+        password.push(charset[rng.gen_range(0..charset.len())]);
+    }
+    
+    // Shuffle the password to avoid predictable patterns
+    use rand::seq::SliceRandom;
+    password.shuffle(&mut rng);
+    
+    String::from_utf8(password).unwrap_or_else(|_| "password123".to_string())
+}
+
+// Generate memorable password (diceware-style)
+pub fn generate_memorable_password(word_count: usize) -> String {
+    const WORDS: &[&str] = &[
+        "apple", "brave", "cloud", "dream", "eagle", "flame", "grace", "heart",
+        "ivory", "jewel", "knight", "lemon", "magic", "noble", "ocean", "peace",
+        "quiet", "river", "stone", "tiger", "unity", "voice", "water", "xenon",
+        "youth", "zebra", "anchor", "bridge", "castle", "dragon", "empire", "forest"
+    ];
+    
+    use rand::seq::SliceRandom;
+    let mut rng = rand::thread_rng();
+    
+    (0..word_count)
+        .map(|_| WORDS.choose(&mut rng).unwrap_or(&"word"))
+        .map(|word| {
+            let mut word = word.to_string();
+            // Capitalize first letter
+            if let Some(first_char) = word.chars().next() {
+                word.replace_range(0..first_char.len_utf8(), &first_char.to_uppercase().to_string());
+            }
+            word
+        })
+        .collect::<Vec<_>>()
+        .join("")
 }

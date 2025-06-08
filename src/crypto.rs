@@ -52,9 +52,16 @@ impl std::fmt::Display for CryptoError {
 impl std::error::Error for CryptoError {}
 
 pub fn derive_key(password: &str, salt: &SaltString) -> Result<Key, CryptoError> {
-    let argon2 = Argon2::default();
+    // Use Argon2id with secure parameters
+    let argon2 = Argon2::new(
+        argon2::Algorithm::Argon2id,
+        argon2::Version::V0x13,
+        argon2::Params::new(65536, 3, 4, None).unwrap()
+    );
+    
     let hash = argon2.hash_password(password.as_bytes(), salt)
         .map_err(|e| CryptoError::KeyDerivation(e.to_string()))?;
+    
     let hash_output = hash.hash
         .ok_or_else(|| CryptoError::KeyDerivation("No hash output".to_string()))?;
     let key_bytes = hash_output.as_bytes();

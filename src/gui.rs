@@ -2,6 +2,8 @@ use eframe::egui;
 use crate::model::{Entry, Vault};
 use crate::vault::VaultManager;
 use crate::utils::*;
+use crate::health::{PasswordHealthAnalyzer, HealthSummary};
+use crate::import_export::ImportExportManager;
 use std::collections::HashMap;
 use zeroize::Zeroizing;
 
@@ -22,8 +24,7 @@ pub struct PassmanApp {
     // UI state
     show_password: HashMap<String, bool>,
     entries: Vec<(String, Entry)>,
-    
-    // Form fields
+      // Form fields
     init_password: Zeroizing<String>,
     init_confirm: Zeroizing<String>,
     login_password: Zeroizing<String>,
@@ -33,17 +34,52 @@ pub struct PassmanApp {
     add_note: String,
     generate_password: bool,
     password_length: usize,
+      // Edit entry fields
+    edit_id: String,
+    edit_username: String,
+    edit_password: String,
+    edit_note: String,
+    edit_generate_password: bool,
+    edit_show_password: bool,
     
     // Search and filtering
     search_query: String,
     
     // Messages
     message: String,
-    message_type: MessageType,
-    
-    // Password strength
+    message_type: MessageType,    // Password strength
     password_strength: String,
-    password_suggestions: Vec<String>,
+    password_suggestions: Vec<String>,    // Health dashboard
+    health_analyzer: PasswordHealthAnalyzer,
+    #[allow(dead_code)]
+    health_summary: Option<HealthSummary>,
+    
+    // 2FA support
+    two_factor_url: String,
+    two_factor_qr: String,
+    two_factor_code: String,
+    
+    // Import/Export fields
+    export_file_path: String,
+    import_file_path: String,
+    export_format: ExportFormat,
+    import_format: ImportFormat,
+    merge_on_import: bool,
+}
+
+#[derive(Default, PartialEq, Clone, Copy)]
+enum ExportFormat {
+    #[default]
+    Json,
+    Csv,
+}
+
+#[derive(Default, PartialEq, Clone, Copy)]
+enum ImportFormat {
+    #[default]
+    Json,
+    Csv,
+    Chrome,
 }
 
 #[derive(Default, PartialEq)]
@@ -51,12 +87,14 @@ pub struct PassmanApp {
 enum Screen {
     #[default]
     Welcome,
-    Init,
-    Login,
+    Init,    Login,
     Main,
     AddEntry,
     EditEntry(String),
     Settings,
+    HealthDashboard, // New screen for password health
+    TwoFactorSetup,  // New screen for 2FA setup
+    ImportExport,    // New screen for import/export
 }
 
 #[derive(Default, PartialEq)]
@@ -126,6 +164,11 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
             init_password: Zeroizing::new(String::new()),
             init_confirm: Zeroizing::new(String::new()),
             login_password: Zeroizing::new(String::new()),
+            export_file_path: String::new(),
+            import_file_path: String::new(),
+            export_format: ExportFormat::Json,
+            import_format: ImportFormat::Json,
+            merge_on_import: false,
             ..Default::default()
         }
     }
@@ -195,10 +238,19 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         *self.login_password = String::new();
 
         Ok(())
-    }
-
-    fn add_entry(&mut self) -> Result<(), String> {
+    }    fn add_entry(&mut self) -> Result<(), String> {
         if let Some(vault) = &mut self.vault {
+            // Validation: check for empty required fields
+            if self.add_id.trim().is_empty() {
+                return Err("Entry ID cannot be empty!".into());
+            }
+            if self.add_username.trim().is_empty() {
+                return Err("Username cannot be empty!".into());
+            }
+            if !self.generate_password && self.add_password.trim().is_empty() {
+                return Err("Password cannot be empty!".into());
+            }
+
             if vault.get_entry(&self.add_id).is_some() {
                 return Err(format!("Entry '{}' already exists!", self.add_id));
             }
@@ -253,38 +305,76 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         self.password_suggestions.clear();
     }
 
-    fn update_password_strength(&mut self) {
-        if !self.add_password.is_empty() {
-            let (strength, suggestions) = analyze_password_strength(&self.add_password);
-            self.password_strength = strength.to_string();
-            self.password_suggestions = suggestions;
-        } else {
-            self.password_strength.clear();
-            self.password_suggestions.clear();
+    // Edit entry methods
+    fn start_edit_entry(&mut self, id: &str) {
+        if let Some(vault) = &self.vault {
+            if let Some(entry) = vault.get_entry(id) {
+                self.edit_id = id.to_string();
+                self.edit_username = entry.username.clone();
+                self.edit_password = entry.password.clone();
+                self.edit_note = entry.note.clone().unwrap_or_default();
+                self.current_screen = Screen::EditEntry(id.to_string());
+            }
         }
-    }    // Helper functions for colored buttons
-    fn primary_button(&self, ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
-        let button = egui::Button::new(text)
-            .fill(egui::Color32::from_rgb(70, 130, 180));
-        ui.add_sized(size, button)
-    }
+    }    fn update_entry(&mut self) -> Result<(), String> {
+        if let Some(vault) = &mut self.vault {
+            // Validation: check for empty required fields
+            if self.edit_username.trim().is_empty() {
+                return Err("Username cannot be empty!".into());
+            }
+            if !self.edit_generate_password && self.edit_password.trim().is_empty() {
+                return Err("Password cannot be empty!".into());
+            }
 
-    fn success_button(&self, ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
-        let button = egui::Button::new(text)
-            .fill(egui::Color32::from_rgb(40, 167, 69));
-        ui.add_sized(size, button)
-    }
+            let password = if self.edit_generate_password {
+                generate_password(self.password_length)
+            } else {
+                self.edit_password.clone()
+            };
 
-    fn danger_button(&self, ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
-        let button = egui::Button::new(text)
-            .fill(egui::Color32::from_rgb(220, 53, 69));
-        ui.add_sized(size, button)
-    }
+            let note = if self.edit_note.trim().is_empty() {
+                None
+            } else {
+                Some(self.edit_note.clone())
+            };
 
-    fn secondary_button(&self, ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
-        let button = egui::Button::new(text)
-            .fill(egui::Color32::from_rgb(108, 117, 125));
-        ui.add_sized(size, button)
+            // Get the existing entry to preserve metadata
+            if let Some(existing_entry) = vault.get_entry(&self.edit_id) {
+                let updated_entry = Entry {
+                    username: self.edit_username.clone(),
+                    password,
+                    note,
+                    created_at: existing_entry.created_at,
+                    modified_at: chrono::Utc::now(),
+                    tags: existing_entry.tags.clone(),
+                    url: existing_entry.url.clone(),
+                    totp_secret: existing_entry.totp_secret.clone(),
+                };
+                
+                vault.add_entry(self.edit_id.clone(), updated_entry);
+            } else {
+                return Err("Entry not found".into());
+            }
+
+            VaultManager::save(vault, &self.master_password, Some(&self.vault_file))
+                .map_err(|e| e.to_string())?;
+
+            self.load_entries();
+            self.current_screen = Screen::Main;
+            self.clear_edit_form();
+            Ok(())
+        } else {
+            Err("No vault loaded".into())
+        }
+    }fn clear_edit_form(&mut self) {
+        self.edit_id.clear();
+        self.edit_username.clear();
+        self.edit_password.clear();
+        self.edit_note.clear();
+        self.edit_generate_password = false;
+        self.edit_show_password = false;
+        self.password_strength.clear();
+        self.password_suggestions.clear();
     }
 }
 
@@ -324,8 +414,10 @@ impl eframe::App for PassmanApp {
                     Screen::EditEntry(ref id) => {
                         let id = id.clone();
                         self.show_edit_entry_screen(ui, &id);
-                    },
-                    Screen::Settings => self.show_settings_screen(ui),
+                    },                    Screen::Settings => self.show_settings_screen(ui),
+                    Screen::HealthDashboard => self.show_health_dashboard(ui),
+                    Screen::TwoFactorSetup => self.show_two_factor_setup(ui),
+                    Screen::ImportExport => self.show_import_export_screen(ui),
                 }
             });
     }
@@ -451,8 +543,7 @@ impl PassmanApp {
         });
     }
 
-    fn show_main_screen(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) { // Add ctx as parameter
-        // Simple header
+    fn show_main_screen(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) { // Add ctx as parameter        // Simple header
         ui.horizontal(|ui| {
             ui.heading("Password Vault");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -465,6 +556,13 @@ impl PassmanApp {
                 
                 if self.secondary_button(ui, "Settings", [70.0, 30.0]).clicked() {
                     self.current_screen = Screen::Settings;
+                }
+                  if self.primary_button(ui, "Health", [60.0, 30.0]).clicked() {
+                    self.current_screen = Screen::HealthDashboard;
+                }
+                
+                if self.secondary_button(ui, "Import/Export", [100.0, 30.0]).clicked() {
+                    self.current_screen = Screen::ImportExport;
                 }
                 
                 if self.success_button(ui, "Add Entry", [80.0, 30.0]).clicked() {
@@ -527,8 +625,7 @@ impl PassmanApp {
                                     }
                                 }
                             });
-                            
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                              ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if self.danger_button(ui, "Delete", [60.0, 30.0]).clicked() {
                                     match self.remove_entry(id) {
                                         Ok(()) => {
@@ -542,6 +639,10 @@ impl PassmanApp {
                                 if self.primary_button(ui, "Copy", [60.0, 30.0]).clicked() {
                                     ctx.output_mut(|o| o.copied_text = entry.password.clone());
                                     self.show_message(format!("Password for \'{}\' copied to clipboard!", id), MessageType::Info);
+                                }
+                                
+                                if self.success_button(ui, "Edit", [60.0, 30.0]).clicked() {
+                                    self.start_edit_entry(id);
                                 }
                                 
                                 let eye_text = if *self.show_password.get(id).unwrap_or(&false) { "Hide" } else { "Show" };
@@ -648,9 +749,7 @@ impl PassmanApp {
                 self.clear_add_form();
             }
         });
-    }
-
-    fn show_edit_entry_screen(&mut self, ui: &mut egui::Ui, id: &str) {
+    }    fn show_edit_entry_screen(&mut self, ui: &mut egui::Ui, id: &str) {
         ui.vertical(|ui| {
             ui.heading(format!("Edit Entry: {}", id));
         });
@@ -658,13 +757,90 @@ impl PassmanApp {
         ui.add_space(PADDING);
 
         ui.vertical_centered(|ui| {
-            ui.add_space(SPACING * 2.0); // Adjusted top spacing
-            
-            ui.label("Edit functionality coming soon...");
             ui.add_space(SPACING * 2.0);
-            if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
-                self.current_screen = Screen::Main;
-            }
+            
+            // Use a grid layout for aligned labels and input fields
+            egui::Grid::new("edit_entry_grid")
+                .num_columns(2)
+                .spacing([SPACING * 2.0, SPACING])
+                .striped(false)
+                .show(ui, |ui| {
+                    ui.label("Username:");
+                    ui.add(egui::TextEdit::singleline(&mut self.edit_username)
+                        .desired_width(INPUT_WIDTH)
+                        .hint_text("Username or email"));
+                    ui.end_row();
+
+                    ui.label(""); // Empty label for checkbox alignment
+                    ui.checkbox(&mut self.edit_generate_password, "Generate new password");
+                    ui.end_row();
+
+                    if self.edit_generate_password {
+                        ui.label("Length:");
+                        ui.add(egui::Slider::new(&mut self.password_length, 8..=64)
+                            .text("characters"));
+                        ui.end_row();
+                    } else {
+                        ui.label("Password:");
+                        ui.horizontal(|ui| {
+                            if ui.add(egui::TextEdit::singleline(&mut self.edit_password)
+                                .desired_width(INPUT_WIDTH - 80.0)
+                                .password(!self.edit_show_password))
+                                .changed() {
+                                self.update_password_strength();
+                            }
+                            
+                            let eye_text = if self.edit_show_password { "Hide" } else { "Show" };
+                            if self.secondary_button(ui, eye_text, [60.0, 30.0]).clicked() {
+                                self.edit_show_password = !self.edit_show_password;
+                            }
+                        });
+                        ui.end_row();
+
+                        if !self.password_strength.is_empty() {
+                            ui.label("Strength:");
+                            ui.label(&self.password_strength);
+                            ui.end_row();
+
+                            if !self.password_suggestions.is_empty() {
+                                ui.label(""); // For grid alignment
+                                ui.collapsing("Show Suggestions", |ui| {
+                                    for suggestion in &self.password_suggestions {
+                                        ui.label(format!("- {}", suggestion));
+                                    }
+                                });
+                                ui.end_row();
+                            }
+                        }
+                    }
+
+                    ui.label("Note:");
+                    ui.add(egui::TextEdit::multiline(&mut self.edit_note)
+                        .desired_width(INPUT_WIDTH)
+                        .desired_rows(3)
+                        .hint_text("Optional notes"));
+                    ui.end_row();
+                });
+
+            ui.add_space(SPACING * 2.0);
+            
+            ui.horizontal(|ui| {
+                if self.success_button(ui, "Update Entry", [150.0, BUTTON_HEIGHT]).clicked() {
+                    match self.update_entry() {
+                        Ok(()) => {
+                            self.show_message("Entry updated successfully!".to_string(), MessageType::Success);
+                        }
+                        Err(e) => {
+                            self.show_message(e, MessageType::Error);
+                        }
+                    }
+                }
+                
+                if self.secondary_button(ui, "Cancel", [150.0, BUTTON_HEIGHT]).clicked() {
+                    self.current_screen = Screen::Main;
+                    self.clear_edit_form();
+                }
+            });
         });
     }
 
@@ -721,5 +897,353 @@ impl PassmanApp {
                 self.current_screen = Screen::Welcome;
             }
         });
+    }
+
+    fn show_health_dashboard(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.heading("Password Health Dashboard");
+        });
+        ui.separator();
+        ui.add_space(PADDING);        ui.vertical_centered(|ui| {
+            ui.add_space(SPACING * 2.0); // Adjusted top spacing
+            
+            // Generate health summary if we have a vault
+            if let Some(vault) = &self.vault {
+                let reports = self.health_analyzer.analyze_vault(vault);
+                let summary = self.health_analyzer.generate_summary(&reports);
+                
+                ui.label(format!("Overall Health: {:.1}%", summary.score));
+                ui.add(egui::ProgressBar::new(summary.score as f32 / 100.0)
+                    .text(format!("{:.1}%", summary.score)));
+                
+                ui.separator();
+                
+                // Show health distribution
+                ui.horizontal(|ui| {
+                    ui.label("Critical:");
+                    ui.colored_label(egui::Color32::RED, format!("{}", summary.critical));
+                    ui.label("Warning:");
+                    ui.colored_label(egui::Color32::YELLOW, format!("{}", summary.warning));
+                    ui.label("Good:");
+                    ui.colored_label(egui::Color32::LIGHT_GREEN, format!("{}", summary.good));
+                    ui.label("Excellent:");
+                    ui.colored_label(egui::Color32::GREEN, format!("{}", summary.excellent));
+                });
+                
+                ui.add_space(SPACING * 2.0);
+                
+                // Show individual entry health
+                ui.label("Entry Details:");
+                egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+                    for report in &reports {
+                        ui.group(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(&report.entry_id);
+                                let health_text = match &report.health {
+                                    crate::health::PasswordHealth::Excellent => "Excellent",
+                                    crate::health::PasswordHealth::Good => "Good", 
+                                    crate::health::PasswordHealth::Warning { .. } => "Warning",
+                                    crate::health::PasswordHealth::Critical { .. } => "Critical",
+                                };
+                                let color = match &report.health {
+                                    crate::health::PasswordHealth::Excellent => egui::Color32::GREEN,
+                                    crate::health::PasswordHealth::Good => egui::Color32::LIGHT_GREEN,
+                                    crate::health::PasswordHealth::Warning { .. } => egui::Color32::YELLOW,
+                                    crate::health::PasswordHealth::Critical { .. } => egui::Color32::RED,
+                                };
+                                ui.colored_label(color, health_text);
+                                ui.label(format!("Age: {} days", report.age_days));
+                            });
+                        });
+                    }
+                });
+            } else {
+                ui.label("No health data available. Please add entries to analyze.");
+            }
+            
+            ui.add_space(SPACING * 2.0);
+            
+            if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                self.current_screen = Screen::Main;
+            }
+        });
+    }
+
+    fn show_two_factor_setup(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.heading("Two-Factor Authentication Setup");
+        });
+        ui.separator();
+        ui.add_space(PADDING);
+
+        ui.vertical_centered(|ui| {
+            ui.add_space(SPACING * 2.0); // Adjusted top spacing
+            
+            ui.horizontal(|ui| {
+                ui.label("2FA URL:");
+                ui.add(egui::TextEdit::singleline(&mut self.two_factor_url)
+                    .desired_width(INPUT_WIDTH));
+            });
+            ui.add_space(SPACING);
+
+            ui.horizontal(|ui| {
+                ui.label("QR Code:");
+                ui.add(egui::TextEdit::multiline(&mut self.two_factor_qr)
+                    .desired_width(INPUT_WIDTH)
+                    .desired_rows(5));
+            });
+            ui.add_space(SPACING);
+
+            ui.horizontal(|ui| {
+                ui.label("Verification Code:");
+                ui.add(egui::TextEdit::singleline(&mut self.two_factor_code)
+                    .desired_width(INPUT_WIDTH));
+            });
+            ui.add_space(SPACING * 2.0);
+            
+            if self.success_button(ui, "Save 2FA Settings", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                // Here you would typically save the 2FA settings and enable 2FA for the user
+                self.show_message("2FA settings saved successfully!".to_string(), MessageType::Success);
+            }
+            ui.add_space(SPACING); // Space between stacked buttons
+              if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
+                self.current_screen = Screen::Main;
+            }        });
+    }
+
+    fn show_import_export_screen(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.heading("Import/Export Data");
+        });
+        ui.separator();
+        ui.add_space(PADDING);
+
+        ui.vertical_centered(|ui| {
+            ui.add_space(SPACING * 2.0);
+            
+            // Export section
+            ui.group(|ui| {
+                ui.vertical(|ui| {
+                    ui.heading("Export Vault");
+                    ui.add_space(SPACING);
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Export file path:");
+                        ui.add(egui::TextEdit::singleline(&mut self.export_file_path)
+                            .desired_width(INPUT_WIDTH)
+                            .hint_text("e.g., passwords_backup.json"));
+                    });
+                    ui.add_space(SPACING);
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Format:");
+                        egui::ComboBox::from_label("")
+                            .selected_text(match self.export_format {
+                                ExportFormat::Json => "JSON",
+                                ExportFormat::Csv => "CSV",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.export_format, ExportFormat::Json, "JSON");
+                                ui.selectable_value(&mut self.export_format, ExportFormat::Csv, "CSV");
+                            });
+                    });
+                    ui.add_space(SPACING);
+                    
+                    if self.success_button(ui, "Export", [120.0, BUTTON_HEIGHT]).clicked() {
+                        if self.export_file_path.trim().is_empty() {
+                            self.show_message("Please specify export file path".to_string(), MessageType::Error);
+                        } else if let Some(vault) = &self.vault {
+                            match self.export_format {
+                                ExportFormat::Json => {
+                                    match ImportExportManager::export_json(vault, &self.export_file_path) {
+                                        Ok(()) => {
+                                            self.show_message("Data exported successfully!".to_string(), MessageType::Success);
+                                        }
+                                        Err(e) => {
+                                            self.show_message(format!("Export failed: {}", e), MessageType::Error);
+                                        }
+                                    }
+                                }
+                                ExportFormat::Csv => {
+                                    match ImportExportManager::export_csv(vault, &self.export_file_path) {
+                                        Ok(()) => {
+                                            self.show_message("Data exported successfully!".to_string(), MessageType::Success);
+                                        }
+                                        Err(e) => {
+                                            self.show_message(format!("Export failed: {}", e), MessageType::Error);
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            self.show_message("No vault loaded".to_string(), MessageType::Error);
+                        }
+                    }
+                });
+            });
+            
+            ui.add_space(SPACING * 2.0);
+            
+            // Import section
+            ui.group(|ui| {
+                ui.vertical(|ui| {
+                    ui.heading("Import Data");
+                    ui.add_space(SPACING);
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Import file path:");
+                        ui.add(egui::TextEdit::singleline(&mut self.import_file_path)
+                            .desired_width(INPUT_WIDTH)
+                            .hint_text("e.g., passwords.json"));
+                    });
+                    ui.add_space(SPACING);
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Format:");
+                        egui::ComboBox::from_label("")
+                            .selected_text(match self.import_format {
+                                ImportFormat::Json => "JSON",
+                                ImportFormat::Csv => "CSV",
+                                ImportFormat::Chrome => "Chrome",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.import_format, ImportFormat::Json, "JSON");
+                                ui.selectable_value(&mut self.import_format, ImportFormat::Csv, "CSV");
+                                ui.selectable_value(&mut self.import_format, ImportFormat::Chrome, "Chrome");
+                            });
+                    });
+                    ui.add_space(SPACING);
+                    
+                    ui.checkbox(&mut self.merge_on_import, "Merge with existing entries (otherwise replace all)");
+                    ui.add_space(SPACING);
+                      if self.primary_button(ui, "Import", [120.0, BUTTON_HEIGHT]).clicked() {
+                        if self.import_file_path.trim().is_empty() {
+                            self.show_message("Please specify import file path".to_string(), MessageType::Error);
+                        } else if self.vault.is_some() {
+                            let result = match self.import_format {
+                                ImportFormat::Json => {
+                                    ImportExportManager::import_json(&self.import_file_path, &self.master_password, Some(&self.vault_file), self.merge_on_import)
+                                }
+                                ImportFormat::Csv => {
+                                    ImportExportManager::import_csv(&self.import_file_path, &self.master_password, Some(&self.vault_file), self.merge_on_import)
+                                }
+                                ImportFormat::Chrome => {
+                                    ImportExportManager::import_browser(&self.import_file_path, &self.master_password, Some(&self.vault_file), "chrome", self.merge_on_import)
+                                }
+                            };
+                            
+                            match result {
+                                Ok(()) => {
+                                    // Reload the vault since import functions save it themselves
+                                    match VaultManager::load(&self.master_password, Some(&self.vault_file)) {
+                                        Ok(vault) => {
+                                            self.vault = Some(vault);
+                                            self.load_entries();
+                                            self.show_message("Data imported successfully!".to_string(), MessageType::Success);
+                                        }
+                                        Err(e) => {
+                                            self.show_message(format!("Import succeeded but reload failed: {}", e), MessageType::Error);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    self.show_message(format!("Import failed: {}", e), MessageType::Error);
+                                }
+                            }
+                        } else {
+                            self.show_message("No vault loaded".to_string(), MessageType::Error);
+                        }
+                    }
+                });
+            });
+            
+            ui.add_space(SPACING * 2.0);
+            
+            if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() {
+                self.current_screen = Screen::Main;
+            }
+        });
+    }
+
+    // Button helper methods
+    fn primary_button(&self, ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
+        ui.add_sized(size, egui::Button::new(text)
+            .fill(egui::Color32::from_rgb(70, 130, 180)) // Steel blue
+            .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 150, 200))))
+    }
+
+    fn secondary_button(&self, ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
+        ui.add_sized(size, egui::Button::new(text)
+            .fill(egui::Color32::from_rgb(108, 117, 125)) // Gray
+            .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(138, 147, 155))))
+    }
+
+    fn success_button(&self, ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
+        ui.add_sized(size, egui::Button::new(text)
+            .fill(egui::Color32::from_rgb(40, 167, 69)) // Green
+            .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(70, 197, 99))))
+    }
+
+    fn danger_button(&self, ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
+        ui.add_sized(size, egui::Button::new(text)
+            .fill(egui::Color32::from_rgb(220, 53, 69)) // Red
+            .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(250, 83, 99))))
+    }
+
+    // Password strength analysis method
+    fn update_password_strength(&mut self) {
+        let password = if self.current_screen == Screen::AddEntry {
+            &self.add_password
+        } else {
+            &self.edit_password
+        };
+
+        if password.is_empty() {
+            self.password_strength.clear();
+            self.password_suggestions.clear();
+            return;
+        }
+
+        // Simple password strength analysis
+        let mut score = 0;
+        let mut suggestions = Vec::new();
+
+        // Length check
+        if password.len() >= 12 {
+            score += 25;
+        } else if password.len() >= 8 {
+            score += 15;
+        } else {
+            suggestions.push("Use at least 8 characters".to_string());
+        }
+
+        // Character variety checks
+        let has_lowercase = password.chars().any(|c| c.is_lowercase());
+        let has_uppercase = password.chars().any(|c| c.is_uppercase());
+        let has_numbers = password.chars().any(|c| c.is_numeric());
+        let has_symbols = password.chars().any(|c| !c.is_alphanumeric());
+
+        if has_lowercase { score += 15; } else { suggestions.push("Add lowercase letters".to_string()); }
+        if has_uppercase { score += 15; } else { suggestions.push("Add uppercase letters".to_string()); }
+        if has_numbers { score += 15; } else { suggestions.push("Add numbers".to_string()); }
+        if has_symbols { score += 15; } else { suggestions.push("Add symbols (!@#$%^&*)".to_string()); }
+
+        // Repetition check
+        let unique_chars: std::collections::HashSet<char> = password.chars().collect();
+        if unique_chars.len() as f32 / password.len() as f32 > 0.7 {
+            score += 15;
+        } else {
+            suggestions.push("Avoid repeating characters".to_string());
+        }
+
+        // Set strength description
+        self.password_strength = match score {
+            0..=30 => format!("Weak ({}%)", score),
+            31..=60 => format!("Fair ({}%)", score),
+            61..=80 => format!("Good ({}%)", score),
+            _ => format!("Strong ({}%)", score),
+        };
+
+        self.password_suggestions = suggestions;
     }
 }
