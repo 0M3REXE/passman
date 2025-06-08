@@ -9,7 +9,8 @@ Cargo.lock
 *.swp
 *.swo
 *~
-
+build.rs
+app-icon.rc
 # OS generated files
 .DS_Store
 .DS_Store?
