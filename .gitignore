@@ -2,7 +2,7 @@
 /target/
 **/*.rs.bk
 Cargo.lock
-
+src/improvements.md
 # IDE files
 .vscode/
 .idea/
@@ -11,6 +11,8 @@ Cargo.lock
 *~
 build.rs
 app-icon.rc
+src/config.rs
+src/two_factor.rs
 # OS generated files
 .DS_Store
 .DS_Store?

@@ -4,18 +4,10 @@ mod vault;
 mod model;
 mod utils;
 mod gui;
-mod config;
 mod health;
 mod import_export;
-mod secure_memory;
-mod error;
-mod backup;
-mod logging;
-mod two_factor;
-mod tests;
-
 use eframe::egui;
-use cli::{Cli, Commands, TransferCommands, ConfigCommands};
+use cli::{Cli, Commands};
 use model::Entry;
 use vault::VaultManager;
 use utils::*;
@@ -53,27 +45,28 @@ fn main() -> Result<(), eframe::Error> {
 fn run_cli() {
     let cli = Cli::parse();
     let vault_file = cli.vault.as_deref();    let result = match cli.command {
-        Commands::Init { description } => handle_init(vault_file, description),
-        Commands::Add { id, username, password, note, url, generate, length } => {
-            handle_add(&id, username, password, note, url, generate, length, vault_file)
+        Commands::Init { description: _ } => handle_init(vault_file),
+        Commands::Add { id, .. } => handle_add(&id, vault_file),
+        Commands::Get { id, .. } => handle_get(&id, vault_file),
+        Commands::List { .. } => handle_list(vault_file),
+        Commands::Edit { id: _ } => {
+            eprintln!("Edit command not yet implemented for CLI. Use GUI mode.");
+            Ok(())
         },
-        Commands::Get { id, copy, show } => handle_get(&id, copy, show, vault_file),
-        Commands::List { tag, search, verbose } => handle_list(tag, search, verbose, vault_file),
-        Commands::Edit { id } => handle_edit(&id, vault_file),
-        Commands::Remove { id, force } => handle_remove(&id, force, vault_file),
-        Commands::Check { password, all } => handle_check(password.as_deref(), all),
+        Commands::Remove { id, .. } => handle_remove(&id, vault_file),
+        Commands::Check { password, .. } => handle_check(password.as_deref()),
         Commands::Vaults => handle_vaults(),
-        Commands::Generate { length, symbols, no_ambiguous, memorable } => {
-            handle_generate(length, symbols, no_ambiguous, memorable)
+        Commands::Generate { .. } => {
+            eprintln!("Generate command not yet implemented for CLI. Use GUI mode.");
+            Ok(())
         },
-        Commands::Transfer(transfer_cmd) => match transfer_cmd {
-            TransferCommands::Export { output, format } => handle_export(&output, &format, vault_file),
-            TransferCommands::Import { input, format, merge } => handle_import(&input, &format, merge, vault_file),
+        Commands::Transfer(_) => {
+            eprintln!("Transfer commands not yet implemented for CLI. Use GUI mode.");
+            Ok(())
         },
-        Commands::Config(config_cmd) => match config_cmd {
-            ConfigCommands::Show => handle_config_show(),
-            ConfigCommands::Set { key, value } => handle_config_set(&key, &value),
-            ConfigCommands::Reset => handle_config_reset(),
+        Commands::Config(_) => {
+            eprintln!("Config commands not yet implemented for CLI. Use GUI mode.");
+            Ok(())
         },
     };
 
@@ -83,7 +76,7 @@ fn run_cli() {
     }
 }
 
-fn handle_init(vault_file: Option<&str>, description: Option<String>) -> Result<(), Box<dyn Error>> {
+fn handle_init(vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
     if VaultManager::exists(vault_file) {
         return Err("Vault already exists! Remove vault file to reset.".into());
     }
@@ -101,13 +94,10 @@ fn handle_init(vault_file: Option<&str>, description: Option<String>) -> Result<
 
     VaultManager::init(&master_password, vault_file)?;
     println!("✓ Vault initialized successfully!");
-    if let Some(desc) = description {
-        println!("Description: {}", desc);
-    }
     Ok(())
 }
 
-fn handle_add(id: &str, username: Option<String>, password: Option<String>, note: Option<String>, url: Option<String>, generate: bool, length: usize, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_add(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
     let master_password = read_password_secure("Enter master password: ")?;
     let mut vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -116,21 +106,18 @@ fn handle_add(id: &str, username: Option<String>, password: Option<String>, note
     }
 
     println!("Adding new entry for '{}'", id);
+    let username = read_line("Username: ")?;
     
-    // Get username - use provided or prompt
-    let username = username.unwrap_or_else(|| {
-        read_line("Username: ").unwrap_or_default()
-    });
-    
-    // Handle password - generate or use provided or prompt
-    let password = if generate {
-        let generated = generate_password(length);
+    let password_choice = read_line_optional("Generate password? (y/N): ")?;
+    let password = if password_choice.to_lowercase() == "y" || password_choice.to_lowercase() == "yes" {
+        let generated = generate_password(16);
         println!("Generated password: {}", generated);
         let (strength, _) = analyze_password_strength(&generated);
         println!("Password strength: {}", strength);
         generated
-    } else if let Some(provided_password) = password {
-        let (strength, suggestions) = analyze_password_strength(&provided_password);
+    } else {
+        let pwd = read_password_secure("Password: ")?;
+        let (strength, suggestions) = analyze_password_strength(&pwd);
         println!("Password strength: {}", strength);
         if !suggestions.is_empty() {
             println!("Suggestions:");
@@ -138,40 +125,13 @@ fn handle_add(id: &str, username: Option<String>, password: Option<String>, note
                 println!("  • {}", suggestion);
             }
         }
-        provided_password
-    } else {
-        let password_choice = read_line_optional("Generate password? (y/N): ")?;
-        if password_choice.to_lowercase() == "y" || password_choice.to_lowercase() == "yes" {
-            let generated = generate_password(16);
-            println!("Generated password: {}", generated);
-            let (strength, _) = analyze_password_strength(&generated);
-            println!("Password strength: {}", strength);
-            generated
-        } else {
-            let pwd = read_password_secure("Password: ")?;
-            let (strength, suggestions) = analyze_password_strength(&pwd);
-            println!("Password strength: {}", strength);
-            if !suggestions.is_empty() {
-                println!("Suggestions:");
-                for suggestion in suggestions {
-                    println!("  • {}", suggestion);
-                }
-            }
-            pwd.to_string()
-        }
+        pwd.to_string()
     };
 
-    // Get note - use provided or prompt
-    let note = note.or_else(|| {
-        let note_input = read_line_optional("Note (optional): ").ok()?;
-        if note_input.is_empty() { None } else { Some(note_input) }
-    });
+    let note_input = read_line_optional("Note (optional): ")?;
+    let note = if note_input.is_empty() { None } else { Some(note_input) };
 
-    let mut entry = Entry::new(username, password, note);
-    if let Some(url_val) = url {
-        entry.url = Some(url_val);
-    }
-
+    let entry = Entry::new(username, password, note);
     vault.add_entry(id.to_string(), entry);
 
     VaultManager::save(&vault, &master_password, vault_file)?;
@@ -179,7 +139,7 @@ fn handle_add(id: &str, username: Option<String>, password: Option<String>, note
     Ok(())
 }
 
-fn handle_get(id: &str, copy: bool, show: bool, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_get(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
     let master_password = read_password_secure("Enter master password: ")?;
     let vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -187,29 +147,14 @@ fn handle_get(id: &str, copy: bool, show: bool, vault_file: Option<&str>) -> Res
         Some(entry) => {
             println!("\n--- {} ---", id);
             println!("Username: {}", entry.username);
-            
-            if show {
-                println!("Password: {}", entry.password);
-            } else {
-                println!("Password: [hidden - use --show to display]");
-            }
-            
+            println!("Password: {}", entry.password);
             if let Some(note) = &entry.note {
                 println!("Note: {}", note);
             }
-            if let Some(url) = &entry.url {
-                println!("URL: {}", url);
-            }
             
-            if copy {
+            let copy_choice = read_line_optional("\nCopy password to clipboard? (y/N): ")?;
+            if copy_choice.to_lowercase() == "y" || copy_choice.to_lowercase() == "yes" {
                 copy_to_clipboard(&entry.password)?;
-                println!("✓ Password copied to clipboard!");
-            } else if !show {
-                let copy_choice = read_line_optional("\nCopy password to clipboard? (y/N): ")?;
-                if copy_choice.to_lowercase() == "y" || copy_choice.to_lowercase() == "yes" {
-                    copy_to_clipboard(&entry.password)?;
-                    println!("✓ Password copied to clipboard!");
-                }
             }
         }
         None => {
@@ -219,7 +164,7 @@ fn handle_get(id: &str, copy: bool, show: bool, vault_file: Option<&str>) -> Res
     Ok(())
 }
 
-fn handle_list(tag: Option<String>, search: Option<String>, verbose: bool, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_list(vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
     let master_password = read_password_secure("Enter master password: ")?;
     let vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -232,63 +177,16 @@ fn handle_list(tag: Option<String>, search: Option<String>, verbose: bool, vault
     let mut entries: Vec<_> = vault.list_entries();
     entries.sort();
     
-    // Filter by search pattern if provided
-    if let Some(search_term) = &search {
-        entries.retain(|id| {
-            if let Some(entry) = vault.get_entry(id) {
-                id.contains(search_term) || 
-                entry.username.contains(search_term) ||
-                entry.note.as_ref().map_or(false, |n| n.contains(search_term))
-            } else {
-                false
-            }
-        });
-    }
-    
-    // Filter by tag if provided (placeholder - tags not fully implemented yet)
-    if let Some(_tag_filter) = &tag {
-        println!("Note: Tag filtering not yet implemented");
-    }
-    
     for (i, id) in entries.iter().enumerate() {
         let entry = vault.get_entry(id).unwrap();
-        if verbose {
-            println!("{}. {} ({})", i + 1, id, entry.username);
-            if let Some(note) = &entry.note {
-                println!("   Note: {}", note);
-            }
-            if let Some(url) = &entry.url {
-                println!("   URL: {}", url);
-            }
-        } else {
-            println!("{}. {} ({})", i + 1, id, entry.username);
-        }
+        println!("{}. {} ({})", i + 1, id, entry.username);
     }
-    
-    if entries.is_empty() && search.is_some() {
-        println!("No entries found matching search criteria.");
-    }
-    
     Ok(())
 }
 
-fn handle_remove(id: &str, force: bool, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_remove(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
     let master_password = read_password_secure("Enter master password: ")?;
     let mut vault = VaultManager::load(&master_password, vault_file)?;
-
-    // Check if entry exists
-    if vault.get_entry(id).is_none() {
-        return Err(format!("Entry '{}' not found!", id).into());
-    }
-
-    // Confirm removal unless force flag is used
-    if !force {
-        let confirm = read_line_optional(&format!("Remove entry '{}'? (y/N): ", id))?;
-        if confirm.to_lowercase() != "y" && confirm.to_lowercase() != "yes" {
-            println!("Operation cancelled.");
-            return Ok(());
-        }
-    }
 
     match vault.remove_entry(id) {
         Some(_) => {
@@ -302,14 +200,7 @@ fn handle_remove(id: &str, force: bool, vault_file: Option<&str>) -> Result<(), 
     Ok(())
 }
 
-fn handle_check(password: Option<&str>, all: bool) -> Result<(), Box<dyn Error>> {
-    if all {
-        println!("Checking all passwords in vault...");
-        // This would require vault access - for now, just show placeholder
-        println!("Note: Vault-wide password checking not yet implemented");
-        return Ok(());
-    }
-
+fn handle_check(password: Option<&str>) -> Result<(), Box<dyn Error>> {
     let pwd = match password {
         Some(p) => Zeroizing::new(p.to_string()),
         None => read_password_secure("Enter password to analyze: ")?,
@@ -362,179 +253,6 @@ fn handle_vaults() -> Result<(), Box<dyn Error>> {
         }
     }
     
-    Ok(())
-}
-
-fn handle_edit(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
-    let master_password = read_password_secure("Enter master password: ")?;
-    let mut vault = VaultManager::load(&master_password, vault_file)?;
-
-    match vault.get_entry(id) {
-        Some(existing_entry) => {
-            println!("Editing entry: {}", id);
-            println!("Current username: {}", existing_entry.username);
-            
-            let new_username = read_line_optional(&format!("New username (current: {}): ", existing_entry.username))?;
-            let username = if new_username.trim().is_empty() {
-                existing_entry.username.clone()
-            } else {
-                new_username
-            };
-            
-            let password_choice = read_line_optional("Update password? (y/N): ")?;
-            let password = if password_choice.to_lowercase() == "y" || password_choice.to_lowercase() == "yes" {
-                let gen_choice = read_line_optional("Generate new password? (y/N): ")?;
-                if gen_choice.to_lowercase() == "y" || gen_choice.to_lowercase() == "yes" {
-                    let generated = generate_password(16);
-                    println!("Generated password: {}", generated);
-                    generated
-                } else {
-                    read_password_secure("New password: ")?.to_string()
-                }
-            } else {
-                existing_entry.password.clone()
-            };
-            
-            let current_note = existing_entry.note.as_deref().unwrap_or("");
-            let new_note = read_line_optional(&format!("Note (current: {}): ", current_note))?;
-            let note = if new_note.trim().is_empty() && !current_note.is_empty() {
-                existing_entry.note.clone()
-            } else if new_note.trim().is_empty() {
-                None
-            } else {
-                Some(new_note)
-            };
-            
-            let mut updated_entry = Entry::new(username, password, note);
-            updated_entry.url = existing_entry.url.clone();
-            updated_entry.tags = existing_entry.tags.clone();
-            updated_entry.totp_secret = existing_entry.totp_secret.clone();
-            
-            vault.add_entry(id.to_string(), updated_entry);
-            VaultManager::save(&vault, &master_password, vault_file)?;
-            println!("✓ Entry '{}' updated successfully!", id);
-        }
-        None => {
-            return Err(format!("Entry '{}' not found!", id).into());
-        }
-    }
-    Ok(())
-}
-
-fn handle_generate(length: usize, symbols: bool, no_ambiguous: bool, memorable: bool) -> Result<(), Box<dyn Error>> {
-    if memorable {
-        println!("Note: Memorable password generation not yet implemented, generating regular password");
-    }
-    
-    let password = if symbols && !no_ambiguous {
-        generate_password(length)
-    } else {
-        // For now, use basic generation - could be enhanced
-        generate_password(length)
-    };
-    
-    println!("Generated password: {}", password);
-    
-    let (strength, suggestions) = analyze_password_strength(&password);
-    println!("Password strength: {}", strength);
-    
-    if !suggestions.is_empty() {
-        println!("Suggestions:");
-        for suggestion in suggestions {
-            println!("  • {}", suggestion);
-        }
-    }
-    
-    let copy_choice = read_line_optional("Copy to clipboard? (y/N): ")?;
-    if copy_choice.to_lowercase() == "y" || copy_choice.to_lowercase() == "yes" {
-        copy_to_clipboard(&password)?;
-        println!("✓ Password copied to clipboard!");
-    }
-    
-    Ok(())
-}
-
-fn handle_export(output: &str, format: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
-    let master_password = read_password_secure("Enter master password: ")?;
-    let vault = VaultManager::load(&master_password, vault_file)?;
-    
-    println!("Exporting vault to {} in {} format...", output, format);
-    
-    match format.to_lowercase().as_str() {
-        "json" => {
-            use crate::import_export::ImportExportManager;
-            ImportExportManager::export_json(&vault, output)?;
-            println!("✓ Vault exported to JSON successfully!");
-        }
-        "csv" => {
-            use crate::import_export::ImportExportManager;
-            ImportExportManager::export_csv(&vault, output)?;
-            println!("✓ Vault exported to CSV successfully!");
-        }
-        _ => {
-            return Err(format!("Unsupported export format: {}", format).into());
-        }
-    }
-    
-    Ok(())
-}
-
-fn handle_import(input: &str, format: &str, merge: bool, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
-    let master_password = read_password_secure("Enter master password: ")?;
-    
-    println!("Importing from {} in {} format...", input, format);
-    if merge {
-        println!("Merging with existing vault data");
-    } else {
-        println!("Warning: This will overwrite existing vault data");
-        let confirm = read_line_optional("Continue? (y/N): ")?;
-        if confirm.to_lowercase() != "y" && confirm.to_lowercase() != "yes" {
-            println!("Import cancelled.");
-            return Ok(());
-        }
-    }
-    
-    match format.to_lowercase().as_str() {
-        "json" => {
-            use crate::import_export::ImportExportManager;
-            ImportExportManager::import_json(input, &master_password, vault_file, merge)?;
-            println!("✓ JSON data imported successfully!");
-        }
-        "csv" => {
-            use crate::import_export::ImportExportManager;
-            ImportExportManager::import_csv(input, &master_password, vault_file, merge)?;
-            println!("✓ CSV data imported successfully!");
-        }        "chrome" => {
-            use crate::import_export::ImportExportManager;
-            ImportExportManager::import_browser(input, &master_password, vault_file, "chrome", merge)?;
-            println!("✓ Chrome data imported successfully!");
-        }
-        _ => {
-            return Err(format!("Unsupported import format: {}", format).into());
-        }
-    }
-    
-    Ok(())
-}
-
-fn handle_config_show() -> Result<(), Box<dyn Error>> {
-    println!("Configuration settings:");
-    println!("Note: Configuration management not yet fully implemented");
-    println!("- Default vault file: vault.dat");
-    println!("- Password generation length: 16");
-    println!("- Security features: Memory locking enabled");
-    Ok(())
-}
-
-fn handle_config_set(key: &str, value: &str) -> Result<(), Box<dyn Error>> {
-    println!("Setting config: {} = {}", key, value);
-    println!("Note: Configuration management not yet fully implemented");
-    Ok(())
-}
-
-fn handle_config_reset() -> Result<(), Box<dyn Error>> {
-    println!("Resetting configuration to defaults...");
-    println!("Note: Configuration management not yet fully implemented");
     Ok(())
 }
 

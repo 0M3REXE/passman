@@ -4,7 +4,15 @@ use std::path::Path;
 use clipboard::{ClipboardProvider, ClipboardContext};
 use regex::Regex;
 use zeroize::Zeroizing;
-use crate::config::PasswordConfig;
+
+#[derive(Debug, Clone)]
+pub struct PasswordConfig {
+    pub include_uppercase: bool,
+    pub include_lowercase: bool,
+    pub include_numbers: bool,
+    pub include_symbols: bool,
+    pub exclude_ambiguous: bool, // 0, O, l, I, etc.
+}
 
 /// Copy text to clipboard with proper error handling
 pub fn copy_to_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error>> {

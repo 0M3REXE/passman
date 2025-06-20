@@ -54,11 +54,6 @@ pub struct PassmanApp {
     #[allow(dead_code)]
     health_summary: Option<HealthSummary>,
     
-    // 2FA support
-    two_factor_url: String,
-    two_factor_qr: String,
-    two_factor_code: String,
-    
     // Import/Export fields
     export_file_path: String,
     import_file_path: String,
@@ -93,7 +88,6 @@ enum Screen {
     EditEntry(String),
     Settings,
     HealthDashboard, // New screen for password health
-    TwoFactorSetup,  // New screen for 2FA setup
     ImportExport,    // New screen for import/export
 }
 
@@ -416,7 +410,6 @@ impl eframe::App for PassmanApp {
                         self.show_edit_entry_screen(ui, &id);
                     },                    Screen::Settings => self.show_settings_screen(ui),
                     Screen::HealthDashboard => self.show_health_dashboard(ui),
-                    Screen::TwoFactorSetup => self.show_two_factor_setup(ui),
                     Screen::ImportExport => self.show_import_export_screen(ui),
                 }
             });
@@ -967,48 +960,6 @@ impl PassmanApp {
                 self.current_screen = Screen::Main;
             }
         });
-    }
-
-    fn show_two_factor_setup(&mut self, ui: &mut egui::Ui) {
-        ui.vertical(|ui| {
-            ui.heading("Two-Factor Authentication Setup");
-        });
-        ui.separator();
-        ui.add_space(PADDING);
-
-        ui.vertical_centered(|ui| {
-            ui.add_space(SPACING * 2.0); // Adjusted top spacing
-            
-            ui.horizontal(|ui| {
-                ui.label("2FA URL:");
-                ui.add(egui::TextEdit::singleline(&mut self.two_factor_url)
-                    .desired_width(INPUT_WIDTH));
-            });
-            ui.add_space(SPACING);
-
-            ui.horizontal(|ui| {
-                ui.label("QR Code:");
-                ui.add(egui::TextEdit::multiline(&mut self.two_factor_qr)
-                    .desired_width(INPUT_WIDTH)
-                    .desired_rows(5));
-            });
-            ui.add_space(SPACING);
-
-            ui.horizontal(|ui| {
-                ui.label("Verification Code:");
-                ui.add(egui::TextEdit::singleline(&mut self.two_factor_code)
-                    .desired_width(INPUT_WIDTH));
-            });
-            ui.add_space(SPACING * 2.0);
-            
-            if self.success_button(ui, "Save 2FA Settings", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
-                // Here you would typically save the 2FA settings and enable 2FA for the user
-                self.show_message("2FA settings saved successfully!".to_string(), MessageType::Success);
-            }
-            ui.add_space(SPACING); // Space between stacked buttons
-              if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
-                self.current_screen = Screen::Main;
-            }        });
     }
 
     fn show_import_export_screen(&mut self, ui: &mut egui::Ui) {

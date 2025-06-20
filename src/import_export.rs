@@ -82,11 +82,10 @@ impl ImportExportManager {
         let mut file = File::create(output_path)?;
         writeln!(file, "id,username,password,note,url")?;
 
-        let mut count = 0;
-        for id in vault.list_entries() {
+        let mut count = 0;        for id in vault.list_entries() {
             if let Some(entry) = vault.get_entry(id) {
                 let note = entry.note.as_deref().unwrap_or("");
-                let url = ""; // TODO: Add URL field to Entry struct
+                let url = entry.url.as_deref().unwrap_or("");
                 writeln!(
                     file,
                     "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
@@ -94,7 +93,7 @@ impl ImportExportManager {
                     entry.username.replace("\"", "\"\""),
                     entry.password.replace("\"", "\"\""),
                     note.replace("\"", "\"\""),
-                    url
+                    url.replace("\"", "\"\"")
                 )?;
                 count += 1;
             }
@@ -191,13 +190,12 @@ impl ImportExportManager {
                 println!("⚠ Skipping existing entry: {}", csv_entry.id);
                 skipped_count += 1;
                 continue;
-            }
-
-            let entry = Entry::new(
+            }            let mut entry = Entry::new(
                 csv_entry.username,
                 csv_entry.password,
                 csv_entry.note,
             );
+            entry.url = csv_entry.url;
 
             vault.add_entry(csv_entry.id.clone(), entry);
             imported_count += 1;
