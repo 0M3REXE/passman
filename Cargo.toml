@@ -42,6 +42,7 @@ uuid = { version = "1.6", features = ["v4"] }
 ansi_term = "0.12"
 notify = "6.1"
 toml = "0.8"
+rfd = "0.15"  # Native file dialogs
 # Windows-specific dependencies
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.52", features = ["Win32_System_Memory", "Win32_Foundation"] }
