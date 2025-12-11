@@ -5,7 +5,7 @@
 use eframe::egui;
 use crate::vault::VaultManager;
 use crate::import_export::ImportExportManager;
-use super::super::types::{Screen, MessageType, ExportFormat, ImportFormat, SPACING, PADDING, INPUT_WIDTH, BUTTON_HEIGHT};
+use super::super::types::{Screen, ExportFormat, ImportFormat, SPACING, PADDING, INPUT_WIDTH, BUTTON_HEIGHT};
 use super::super::app::PassmanApp;
 
 impl PassmanApp {
@@ -50,32 +50,32 @@ impl PassmanApp {
                     
                     if self.success_button(ui, "Export", [120.0, BUTTON_HEIGHT]).clicked() {
                         if self.export_file_path.trim().is_empty() {
-                            self.show_message("Please specify export file path".to_string(), MessageType::Error);
+                            self.toast_error("Please specify export file path");
                         } else if let Some(vault) = &self.vault {
                             match self.export_format {
                                 ExportFormat::Json => {
                                     match ImportExportManager::export_json(vault, &self.export_file_path) {
                                         Ok(()) => {
-                                            self.show_message("Data exported successfully!".to_string(), MessageType::Success);
+                                            self.toast_success("Data exported successfully!");
                                         }
                                         Err(e) => {
-                                            self.show_message(format!("Export failed: {}", e), MessageType::Error);
+                                            self.toast_error(format!("Export failed: {}", e));
                                         }
                                     }
                                 }
                                 ExportFormat::Csv => {
                                     match ImportExportManager::export_csv(vault, &self.export_file_path) {
                                         Ok(()) => {
-                                            self.show_message("Data exported successfully!".to_string(), MessageType::Success);
+                                            self.toast_success("Data exported successfully!");
                                         }
                                         Err(e) => {
-                                            self.show_message(format!("Export failed: {}", e), MessageType::Error);
+                                            self.toast_error(format!("Export failed: {}", e));
                                         }
                                     }
                                 }
                             }
                         } else {
-                            self.show_message("No vault loaded".to_string(), MessageType::Error);
+                            self.toast_error("No vault loaded");
                         }
                     }
                 });
@@ -118,7 +118,7 @@ impl PassmanApp {
                     
                     if self.primary_button(ui, "Import", [120.0, BUTTON_HEIGHT]).clicked() {
                         if self.import_file_path.trim().is_empty() {
-                            self.show_message("Please specify import file path".to_string(), MessageType::Error);
+                            self.toast_error("Please specify import file path");
                         } else if self.vault.is_some() {
                             let result = match self.import_format {
                                 ImportFormat::Json => {
@@ -139,19 +139,19 @@ impl PassmanApp {
                                         Ok(vault) => {
                                             self.vault = Some(vault);
                                             self.load_entries();
-                                            self.show_message("Data imported successfully!".to_string(), MessageType::Success);
+                                            self.toast_success("Data imported successfully!");
                                         }
                                         Err(e) => {
-                                            self.show_message(format!("Import succeeded but reload failed: {}", e), MessageType::Error);
+                                            self.toast_error(format!("Import succeeded but reload failed: {}", e));
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    self.show_message(format!("Import failed: {}", e), MessageType::Error);
+                                    self.toast_error(format!("Import failed: {}", e));
                                 }
                             }
                         } else {
-                            self.show_message("No vault loaded".to_string(), MessageType::Error);
+                            self.toast_error("No vault loaded");
                         }
                     }
                 });

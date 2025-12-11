@@ -29,7 +29,7 @@ impl PassmanApp {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.secondary_button(ui, "🔒 Lock", [70.0, 30.0]).clicked() {
                     self.lock_vault();
-                    self.clear_message();
+                    self.toast_info("Vault locked".to_string());
                 }
                 
                 if self.secondary_button(ui, "⚙️", [35.0, 30.0]).clicked() {

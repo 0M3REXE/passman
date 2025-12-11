@@ -51,16 +51,6 @@ pub enum Screen {
     ImportExport,
 }
 
-/// Message types for UI feedback
-#[derive(Default, PartialEq, Clone, Copy)]
-pub enum MessageType {
-    #[default]
-    None,
-    Success,
-    Error,
-    Info,
-}
-
 /// Toast notification types
 #[derive(Clone, Copy, PartialEq)]
 pub enum ToastType {

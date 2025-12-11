@@ -70,10 +70,6 @@ pub struct PassmanApp {
     // Search and filtering
     pub search_query: String,
     
-    // Messages
-    pub message: String,
-    pub message_type: MessageType,
-    
     // Password strength
     pub password_strength: String,
     pub password_suggestions: Vec<String>,
@@ -145,8 +141,6 @@ impl Default for PassmanApp {
             edit_show_password: false,
             pending_delete: None,
             search_query: String::new(),
-            message: String::new(),
-            message_type: MessageType::None,
             password_strength: String::new(),
             password_suggestions: Vec::new(),
             health_analyzer: PasswordHealthAnalyzer::new(),
@@ -199,18 +193,6 @@ impl PassmanApp {
         app
     }
 
-    // === Message Methods ===
-    
-    pub fn show_message(&mut self, message: String, msg_type: MessageType) {
-        self.message = message;
-        self.message_type = msg_type;
-    }
-
-    pub fn clear_message(&mut self) {
-        self.message.clear();
-        self.message_type = MessageType::None;
-    }
-    
     // === Toast Methods ===
     
     pub fn add_toast(&mut self, message: impl Into<String>, toast_type: ToastType) {
@@ -557,7 +539,6 @@ impl PassmanApp {
                 if i.modifiers.ctrl && i.key_pressed(egui::Key::N) && self.current_screen == Screen::Main {
                     self.current_screen = Screen::AddEntry;
                     self.clear_add_form();
-                    self.clear_message();
                 }
                 
                 // Ctrl+F - Focus search
@@ -568,7 +549,7 @@ impl PassmanApp {
                 // Ctrl+L - Lock vault
                 if i.modifiers.ctrl && i.key_pressed(egui::Key::L) {
                     self.lock_vault();
-                    self.show_message("Vault locked".to_string(), MessageType::Info);
+                    self.toast_info("Vault locked".to_string());
                 }
                 
                 // Ctrl+H - Health dashboard
@@ -588,7 +569,6 @@ impl PassmanApp {
                     Screen::AddEntry | Screen::EditEntry(_) | Screen::Settings | 
                     Screen::HealthDashboard | Screen::ImportExport => {
                         self.current_screen = Screen::Main;
-                        self.clear_message();
                     }
                     _ => {}
                 }
@@ -627,10 +607,7 @@ impl eframe::App for PassmanApp {
             if let Some(last) = self.last_activity {
                 if last.elapsed().as_secs() >= self.lock_timeout_secs {
                     self.lock_vault();
-                    self.show_message(
-                        format!("Session timed out after {} seconds of inactivity", self.lock_timeout_secs),
-                        MessageType::Info
-                    );
+                    self.toast_info(format!("Session timed out after {} seconds of inactivity", self.lock_timeout_secs));
                 }
             }
         }
@@ -653,24 +630,6 @@ impl eframe::App for PassmanApp {
                 .inner_margin(PADDING)
                 .fill(panel_fill))
             .show(ctx, |ui| {
-                // Message display
-                if !self.message.is_empty() {
-                    let color = match self.message_type {
-                        MessageType::Success => egui::Color32::from_rgb(40, 167, 69),
-                        MessageType::Error => egui::Color32::from_rgb(220, 53, 69),
-                        MessageType::Info => egui::Color32::from_rgb(23, 162, 184),
-                        MessageType::None => egui::Color32::from_rgb(108, 117, 125),
-                    };
-                    
-                    ui.horizontal(|ui| {
-                        ui.colored_label(color, &self.message);
-                        if self.secondary_button(ui, "×", [28.0, 28.0]).clicked() {
-                            self.clear_message();
-                        }
-                    });
-                    ui.add_space(SPACING);
-                }
-
                 match self.current_screen.clone() {
                     Screen::Welcome => self.show_welcome_screen(ui),
                     Screen::Init => self.show_init_screen(ui),

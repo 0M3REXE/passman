@@ -5,7 +5,7 @@
 use eframe::egui;
 use crate::vault::VaultManager;
 use crate::config::get_config;
-use super::super::types::{Screen, MessageType, SPACING, PADDING, INPUT_WIDTH, BUTTON_HEIGHT};
+use super::super::types::{Screen, SPACING, PADDING, INPUT_WIDTH, BUTTON_HEIGHT};
 use super::super::app::PassmanApp;
 
 impl PassmanApp {
@@ -40,11 +40,9 @@ impl PassmanApp {
             if vault_exists {
                 if self.primary_button(ui, "Open Vault", [150.0, BUTTON_HEIGHT]).clicked() {
                     self.current_screen = Screen::Login;
-                    self.clear_message();
                 }
             } else if self.success_button(ui, "Create Vault", [150.0, BUTTON_HEIGHT]).clicked() {
                 self.current_screen = Screen::Init;
-                self.clear_message();
             }
             ui.add_space(SPACING);
             if self.secondary_button(ui, "Settings", [150.0, BUTTON_HEIGHT]).clicked() {
@@ -113,10 +111,10 @@ impl PassmanApp {
             if self.success_button(ui, "Create", [150.0, BUTTON_HEIGHT]).clicked() {
                 match self.init_vault() {
                     Ok(()) => {
-                        self.show_message("Vault created successfully!".to_string(), MessageType::Success);
+                        self.toast_success("Vault created successfully!");
                     }
                     Err(e) => {
-                        self.show_message(e, MessageType::Error);
+                        self.toast_error(e);
                     }
                 }
             }
@@ -126,7 +124,6 @@ impl PassmanApp {
                 self.current_screen = Screen::Welcome;
                 *self.init_password = String::new();
                 *self.init_confirm = String::new();
-                self.clear_message();
             }
         });
     }
@@ -153,10 +150,10 @@ impl PassmanApp {
             if self.primary_button(ui, "Open", [150.0, BUTTON_HEIGHT]).clicked() {
                 match self.login() {
                     Ok(()) => {
-                        self.show_message("Vault opened successfully!".to_string(), MessageType::Success);
+                        self.toast_success("Vault opened successfully!");
                     }
                     Err(e) => {
-                        self.show_message(e, MessageType::Error);
+                        self.toast_error(e);
                     }
                 }
             }
@@ -165,7 +162,6 @@ impl PassmanApp {
             if self.secondary_button(ui, "Cancel", [150.0, BUTTON_HEIGHT]).clicked() {
                 self.current_screen = Screen::Welcome;
                 *self.login_password = String::new();
-                self.clear_message();
             }
         });
     }

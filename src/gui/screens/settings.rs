@@ -4,7 +4,7 @@
 
 use eframe::egui;
 use crate::vault::VaultManager;
-use super::super::types::{Screen, MessageType, SPACING, PADDING, INPUT_WIDTH, BUTTON_HEIGHT};
+use super::super::types::{Screen, SPACING, PADDING, INPUT_WIDTH, BUTTON_HEIGHT};
 use super::super::theme;
 use super::super::widgets;
 use super::super::app::PassmanApp;
@@ -66,7 +66,7 @@ impl PassmanApp {
                                 if self.vault_file != vault_filename {
                                     if self.primary_button(ui, "Select", [80.0, 28.0]).clicked() {
                                         self.vault_file = vault_filename.clone();
-                                        self.show_message(format!("Vault file set to '{}'. Please reopen.", self.vault_file), MessageType::Info);
+                                        self.toast_info(format!("Vault file set to '{}'. Please reopen.", self.vault_file));
                                         self.current_screen = Screen::Welcome;
                                     }
                                 } else {
@@ -125,15 +125,15 @@ impl PassmanApp {
                     if self.primary_button(ui, "Change Password", [150.0, BUTTON_HEIGHT]).clicked() {
                         // Validate inputs
                         if self.change_current_password.is_empty() {
-                            self.show_message("Current password is required".into(), MessageType::Error);
+                            self.toast_error("Current password is required");
                         } else if self.change_new_password.is_empty() {
-                            self.show_message("New password is required".into(), MessageType::Error);
+                            self.toast_error("New password is required");
                         } else if self.change_new_password.len() < 8 {
-                            self.show_message("New password must be at least 8 characters".into(), MessageType::Error);
+                            self.toast_error("New password must be at least 8 characters");
                         } else if self.change_new_password.as_str() != self.change_confirm_password.as_str() {
-                            self.show_message("New passwords do not match".into(), MessageType::Error);
+                            self.toast_error("New passwords do not match");
                         } else if self.change_current_password.as_str() != self.master_password.as_str() {
-                            self.show_message("Current password is incorrect".into(), MessageType::Error);
+                            self.toast_error("Current password is incorrect");
                         } else {
                             // Attempt to change password
                             match VaultManager::change_password(
@@ -146,10 +146,10 @@ impl PassmanApp {
                                     *self.change_current_password = String::new();
                                     *self.change_new_password = String::new();
                                     *self.change_confirm_password = String::new();
-                                    self.show_message("Master password changed successfully!".into(), MessageType::Success);
+                                    self.toast_success("Master password changed successfully!");
                                 }
                                 Err(e) => {
-                                    self.show_message(format!("Failed to change password: {}", e), MessageType::Error);
+                                    self.toast_error(format!("Failed to change password: {}", e));
                                 }
                             }
                         }
