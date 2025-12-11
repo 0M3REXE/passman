@@ -406,7 +406,7 @@ impl VaultManager {
         }
 
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let backup_name = format!("{}.backup.{}", vault_path, timestamp);
+        let backup_name = format!("{}.bak.{}", vault_path, timestamp);
         
         fs::copy(vault_path, &backup_name)?;
         log::info!("Vault backup created: {}", backup_name);
