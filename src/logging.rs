@@ -3,6 +3,8 @@
 //! Structured logging with levels, file output, and secure handling.
 //! Ensures sensitive data is never logged.
 
+#![allow(dead_code)]
+
 use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 use std::fs::{File, OpenOptions};
 use std::io::Write;

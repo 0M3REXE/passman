@@ -6,6 +6,8 @@
 //! - HMAC-SHA256 integrity verification
 //! - Atomic file writes to prevent corruption
 
+#![allow(dead_code)]
+
 use crate::crypto::{derive_key, encrypt_data, decrypt_data, Key};
 use crate::model::Vault;
 use argon2::password_hash::SaltString;

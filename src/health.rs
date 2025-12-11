@@ -77,14 +77,14 @@ impl PasswordHealthAnalyzer {
 
     /// Analyze the health of a single password entry
     pub fn analyze_entry(&self, id: &str, entry: &Entry) -> HealthReport {
-        let (strength, _) = analyze_password_strength(&entry.password);
+        let (strength, _) = analyze_password_strength(entry.password_str());
         let age_days = (Utc::now() - entry.created_at).num_days();
         
         let mut issues = Vec::new();
         let mut recommendations = Vec::new();
 
         // Check for breached passwords
-        if self.is_password_breached(&entry.password) {
+        if self.is_password_breached(entry.password_str()) {
             issues.push("Password found in data breach".to_string());
             recommendations.push("Change password immediately".to_string());
         }
@@ -110,7 +110,7 @@ impl PasswordHealthAnalyzer {
         }
 
         // Check for common patterns
-        if self.has_common_patterns(&entry.password) {
+        if self.has_common_patterns(entry.password_str()) {
             issues.push("Password uses common patterns".to_string());
             recommendations.push("Avoid predictable patterns".to_string());
         }
@@ -146,7 +146,7 @@ impl PasswordHealthAnalyzer {
         let password_lower = password.to_lowercase();
         
         // Check for common patterns
-        let patterns = vec![
+        let patterns = [
             "123", "abc", "qwe", "asd", "zxc",
             "password", "admin", "user", "test",
         ];
@@ -192,12 +192,13 @@ impl PasswordHealthAnalyzer {
     }
 
     /// Calculate overall health score (0-100)
-    fn calculate_health_score(&self, critical: usize, warning: usize, good: usize, excellent: usize, total: usize) -> u8 {
+    fn calculate_health_score(&self, _critical: usize, warning: usize, good: usize, excellent: usize, total: usize) -> u8 {
         if total == 0 {
             return 100;
         }
 
-        let score = (excellent * 100 + good * 75 + warning * 40 + critical * 0) / total;
+        // Critical passwords contribute 0 to score (already penalized by being critical)
+        let score = (excellent * 100 + good * 75 + warning * 40) / total;
         score.min(100) as u8
     }
 }

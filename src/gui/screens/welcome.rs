@@ -42,11 +42,9 @@ impl PassmanApp {
                     self.current_screen = Screen::Login;
                     self.clear_message();
                 }
-            } else {
-                if self.success_button(ui, "Create Vault", [150.0, BUTTON_HEIGHT]).clicked() {
-                    self.current_screen = Screen::Init;
-                    self.clear_message();
-                }
+            } else if self.success_button(ui, "Create Vault", [150.0, BUTTON_HEIGHT]).clicked() {
+                self.current_screen = Screen::Init;
+                self.clear_message();
             }
             ui.add_space(SPACING);
             if self.secondary_button(ui, "Settings", [150.0, BUTTON_HEIGHT]).clicked() {

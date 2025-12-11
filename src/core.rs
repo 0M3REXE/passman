@@ -285,7 +285,7 @@ impl PassmanCore {
 
     /// Check if vault is empty
     pub fn is_empty(&self) -> bool {
-        self.vault.as_ref().map_or(true, |v| v.is_empty())
+        self.vault.as_ref().is_none_or(|v| v.is_empty())
     }
 
     /// Get entry count
@@ -360,7 +360,7 @@ impl PassmanCore {
         for id in vault.list_entries() {
             if let Some(entry) = vault.get_entry(id) {
                 password_map
-                    .entry(&entry.password)
+                    .entry(entry.password_str())
                     .or_default()
                     .push(id.clone());
             }
@@ -552,7 +552,7 @@ mod tests {
             .build();
 
         assert_eq!(entry.username, "user@example.com");
-        assert_eq!(entry.password, "SecurePass123!");
+        assert_eq!(entry.password_str(), "SecurePass123!");
         assert_eq!(entry.note, Some("Test note".to_string()));
         assert_eq!(entry.url, Some("https://example.com".to_string()));
         assert_eq!(entry.tags.len(), 2);
@@ -564,7 +564,7 @@ mod tests {
             .generate_password(20)
             .build();
 
-        assert_eq!(entry.password.len(), 20);
+        assert_eq!(entry.password_str().len(), 20);
     }
 
     #[test]
@@ -595,7 +595,7 @@ mod tests {
         let entry = core.create_entry("user", "pass", Some("note".to_string()));
         
         assert_eq!(entry.username, "user");
-        assert_eq!(entry.password, "pass");
+        assert_eq!(entry.password_str(), "pass");
         assert_eq!(entry.note, Some("note".to_string()));
     }
 }

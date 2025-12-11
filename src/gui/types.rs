@@ -2,6 +2,8 @@
 //!
 //! Shared types and enums used throughout the GUI.
 
+#![allow(dead_code)]
+
 use std::time::Instant;
 
 // UI Constants

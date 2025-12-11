@@ -2,6 +2,8 @@
 //!
 //! Modal dialogs, loading overlays, and onboarding wizard.
 
+#![allow(dead_code)]
+
 use eframe::egui;
 use super::types::{SPACING, BUTTON_HEIGHT};
 use super::widgets::ButtonWidgets;
@@ -223,10 +225,8 @@ pub fn render_onboarding(
             ui.add_space(SPACING * 2.0);
             
             ui.horizontal(|ui| {
-                if *onboarding_step > 0 {
-                    if ButtonWidgets::secondary(ui, "← Back", [80.0, BUTTON_HEIGHT]).clicked() {
-                        *onboarding_step -= 1;
-                    }
+                if *onboarding_step > 0 && ButtonWidgets::secondary(ui, "← Back", [80.0, BUTTON_HEIGHT]).clicked() {
+                    *onboarding_step -= 1;
                 }
                 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -234,16 +234,12 @@ pub fn render_onboarding(
                         if ButtonWidgets::primary(ui, "Next →", [80.0, BUTTON_HEIGHT]).clicked() {
                             *onboarding_step += 1;
                         }
-                    } else {
-                        if ButtonWidgets::success(ui, "Get Started", [100.0, BUTTON_HEIGHT]).clicked() {
-                            *show_onboarding = false;
-                        }
+                    } else if ButtonWidgets::success(ui, "Get Started", [100.0, BUTTON_HEIGHT]).clicked() {
+                        *show_onboarding = false;
                     }
                     
-                    if *onboarding_step < 3 {
-                        if ui.small_button("Skip").clicked() {
-                            *show_onboarding = false;
-                        }
+                    if *onboarding_step < 3 && ui.small_button("Skip").clicked() {
+                        *show_onboarding = false;
                     }
                 });
             });

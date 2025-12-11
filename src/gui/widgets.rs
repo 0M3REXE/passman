@@ -2,6 +2,8 @@
 //!
 //! Reusable UI widgets and button helpers.
 
+#![allow(dead_code)]
+
 use eframe::egui;
 use std::collections::HashMap;
 

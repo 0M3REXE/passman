@@ -3,7 +3,10 @@
 //! Handles session state, auto-lock timeout, and security policies
 //! for the password manager application.
 
+#![allow(dead_code)]
+
 use std::time::{Duration, Instant};
+#[allow(unused_imports)]
 use zeroize::Zeroizing;
 use crate::crypto::Key;
 

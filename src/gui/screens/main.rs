@@ -67,10 +67,8 @@ impl PassmanApp {
             }
             
             // Clear search button
-            if !self.search_query.is_empty() {
-                if self.secondary_button(ui, "✕", [25.0, 25.0]).clicked() {
-                    self.search_query.clear();
-                }
+            if !self.search_query.is_empty() && self.secondary_button(ui, "✕", [25.0, 25.0]).clicked() {
+                self.search_query.clear();
             }
             
             ui.add_space(SPACING * 2.0);
@@ -147,7 +145,7 @@ impl PassmanApp {
                         if *self.show_password.get(id).unwrap_or(&false) {
                             // Display password as non-selectable label with monospace font
                             ui.add(egui::Label::new(
-                                egui::RichText::new(&entry.password)
+                                egui::RichText::new(entry.password_str())
                                     .monospace()
                                     .color(egui::Color32::from_rgb(255, 180, 100))
                             ).selectable(false));
@@ -172,13 +170,13 @@ impl PassmanApp {
                     }
                     
                     if self.primary_button(ui, "📋 Copy", [70.0, 30.0]).clicked() {
-                        match self.secure_clipboard.copy_password(&entry.password) {
+                        match self.secure_clipboard.copy_password(entry.password_str()) {
                             Ok(()) => {
                                 let timeout = self.clipboard_clear_secs;
                                 self.toast_success(format!("Password copied! Auto-clear in {}s", timeout));
                             }
                             Err(_) => {
-                                ctx.output_mut(|o| o.copied_text = entry.password.clone());
+                                ctx.output_mut(|o| o.copied_text = entry.password_str().to_string());
                                 self.toast_info("Password copied (standard clipboard)");
                             }
                         }

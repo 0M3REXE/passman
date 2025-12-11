@@ -98,16 +98,14 @@ impl PassmanApp {
 
             ui.add_space(SPACING * 2.0);
             
-            if self.success_button(ui, "Add Entry", [150.0, BUTTON_HEIGHT]).clicked() {
-                if self.validate_add_entry() {
-                    match self.add_entry() {
-                        Ok(()) => {
-                            self.toast_success("Entry added successfully!");
-                            self.clear_form_errors();
-                        }
-                        Err(e) => {
-                            self.toast_error(e);
-                        }
+            if self.success_button(ui, "Add Entry", [150.0, BUTTON_HEIGHT]).clicked() && self.validate_add_entry() {
+                match self.add_entry() {
+                    Ok(()) => {
+                        self.toast_success("Entry added successfully!");
+                        self.clear_form_errors();
+                    }
+                    Err(e) => {
+                        self.toast_error(e);
                     }
                 }
             }
@@ -198,16 +196,14 @@ impl PassmanApp {
             ui.add_space(SPACING * 2.0);
             
             ui.horizontal(|ui| {
-                if self.success_button(ui, "Update Entry", [150.0, BUTTON_HEIGHT]).clicked() {
-                    if self.validate_edit_entry() {
-                        match self.update_entry() {
-                            Ok(()) => {
-                                self.toast_success("Entry updated successfully!");
-                                self.clear_form_errors();
-                            }
-                            Err(e) => {
-                                self.toast_error(e);
-                            }
+                if self.success_button(ui, "Update Entry", [150.0, BUTTON_HEIGHT]).clicked() && self.validate_edit_entry() {
+                    match self.update_entry() {
+                        Ok(()) => {
+                            self.toast_success("Entry updated successfully!");
+                            self.clear_form_errors();
+                        }
+                        Err(e) => {
+                            self.toast_error(e);
                         }
                     }
                 }

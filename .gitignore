@@ -26,7 +26,12 @@ Thumbs.db
 *.dat
 vault.dat
 test.dat
+vault1.dat
+vault1.dat.bak
 
+/target
+*.dat
+passman.toml
 # Log files
 *.log
 

@@ -2,6 +2,8 @@
 //!
 //! Core PassmanApp struct and state management.
 
+#![allow(dead_code)]
+
 use eframe::egui;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -277,7 +279,7 @@ impl PassmanApp {
         if self.add_id.trim().is_empty() {
             self.set_form_error("add_id", "Entry ID is required");
             is_valid = false;
-        } else if self.vault.as_ref().map_or(false, |v| v.entries.contains_key(&self.add_id)) {
+        } else if self.vault.as_ref().is_some_and(|v| v.entries.contains_key(&self.add_id)) {
             self.set_form_error("add_id", "Entry ID already exists");
             is_valid = false;
         }
@@ -478,7 +480,7 @@ impl PassmanApp {
             if let Some(entry) = vault.get_entry(id) {
                 self.edit_id = id.to_string();
                 self.edit_username = entry.username.clone();
-                self.edit_password = entry.password.clone();
+                self.edit_password = entry.password_str().to_string();
                 self.edit_note = entry.note.clone().unwrap_or_default();
                 self.current_screen = Screen::EditEntry(id.to_string());
             }
@@ -509,7 +511,7 @@ impl PassmanApp {
             if let Some(existing_entry) = vault.get_entry(&self.edit_id) {
                 let updated_entry = Entry {
                     username: self.edit_username.clone(),
-                    password,
+                    password: password.into(),
                     note,
                     created_at: existing_entry.created_at,
                     modified_at: chrono::Utc::now(),
@@ -552,19 +554,15 @@ impl PassmanApp {
         ctx.input(|i| {
             if self.vault.is_some() {
                 // Ctrl+N - New entry
-                if i.modifiers.ctrl && i.key_pressed(egui::Key::N) {
-                    if self.current_screen == Screen::Main {
-                        self.current_screen = Screen::AddEntry;
-                        self.clear_add_form();
-                        self.clear_message();
-                    }
+                if i.modifiers.ctrl && i.key_pressed(egui::Key::N) && self.current_screen == Screen::Main {
+                    self.current_screen = Screen::AddEntry;
+                    self.clear_add_form();
+                    self.clear_message();
                 }
                 
                 // Ctrl+F - Focus search
-                if i.modifiers.ctrl && i.key_pressed(egui::Key::F) {
-                    if self.current_screen == Screen::Main {
-                        self.request_search_focus = true;
-                    }
+                if i.modifiers.ctrl && i.key_pressed(egui::Key::F) && self.current_screen == Screen::Main {
+                    self.request_search_focus = true;
                 }
                 
                 // Ctrl+L - Lock vault
@@ -574,17 +572,13 @@ impl PassmanApp {
                 }
                 
                 // Ctrl+H - Health dashboard
-                if i.modifiers.ctrl && i.key_pressed(egui::Key::H) {
-                    if self.current_screen == Screen::Main {
-                        self.current_screen = Screen::HealthDashboard;
-                    }
+                if i.modifiers.ctrl && i.key_pressed(egui::Key::H) && self.current_screen == Screen::Main {
+                    self.current_screen = Screen::HealthDashboard;
                 }
                 
                 // Ctrl+S - Settings
-                if i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
-                    if self.current_screen == Screen::Main {
-                        self.current_screen = Screen::Settings;
-                    }
+                if i.modifiers.ctrl && i.key_pressed(egui::Key::S) && self.current_screen == Screen::Main {
+                    self.current_screen = Screen::Settings;
                 }
             }
             

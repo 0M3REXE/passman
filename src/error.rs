@@ -3,6 +3,8 @@
 //! Provides typed errors for the password manager application
 //! with user-friendly error messages.
 
+#![allow(dead_code)]
+
 use std::fmt;
 use std::io;
 

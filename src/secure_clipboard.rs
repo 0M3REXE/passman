@@ -6,6 +6,8 @@
 //! On Windows, this module also excludes sensitive content from clipboard history
 //! and clears it from history when clearing the clipboard.
 
+#![allow(dead_code)]
+
 use clipboard::{ClipboardProvider, ClipboardContext};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::thread;

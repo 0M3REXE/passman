@@ -1,7 +1,7 @@
 use aes_gcm::{Aes256Gcm, KeyInit};
 use aes_gcm::aead::{Aead, generic_array::GenericArray};
 use argon2::{Argon2, password_hash::SaltString, PasswordHasher};
-use rand;
+
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Secure key wrapper that automatically zeroizes on drop

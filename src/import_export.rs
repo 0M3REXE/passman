@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::model::{Entry, Vault};
 use crate::vault::VaultManager;
 use serde::{Serialize, Deserialize};
@@ -51,7 +53,7 @@ impl ImportExportManager {
             .filter_map(|id| {                vault.get_entry(id).map(|entry| ExportEntry {
                     id: id.to_string(),
                     username: entry.username.clone(),
-                    password: entry.password.clone(),
+                    password: entry.password_str().to_string(),
                     note: entry.note.clone(),
                     url: entry.url.clone(),
                     created_at: entry.created_at,
@@ -91,7 +93,7 @@ impl ImportExportManager {
                     "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
                     id.replace("\"", "\"\""),
                     entry.username.replace("\"", "\"\""),
-                    entry.password.replace("\"", "\"\""),
+                    entry.password_str().replace("\"", "\"\""),
                     note.replace("\"", "\"\""),
                     url.replace("\"", "\"\"")
                 )?;

@@ -12,6 +12,7 @@ mod error;
 mod config;
 mod logging;
 mod core;
+mod secure_types;
 
 use eframe::egui;
 use cli::{Cli, Commands, TransferCommands, ConfigCommands};
@@ -162,9 +163,9 @@ fn handle_get(id: &str, vault_file: Option<&str>, copy: bool, show: bool) -> Res
             println!("Username: {}", entry.username);
             
             if show {
-                println!("Password: {}", entry.password);
+                println!("Password: {}", entry.password_str());
             } else {
-                println!("Password: {}", "*".repeat(entry.password.len().min(16)));
+                println!("Password: {}", "*".repeat(entry.password_str().len().min(16)));
             }
             
             if let Some(note) = &entry.note {
@@ -172,12 +173,12 @@ fn handle_get(id: &str, vault_file: Option<&str>, copy: bool, show: bool) -> Res
             }
             
             if copy {
-                copy_to_clipboard(&entry.password)?;
+                copy_to_clipboard(entry.password_str())?;
                 println!("✓ Password copied to clipboard!");
             } else if !show {
                 let copy_choice = read_line_optional("\nCopy password to clipboard? (y/N): ")?;
                 if copy_choice.to_lowercase() == "y" || copy_choice.to_lowercase() == "yes" {
-                    copy_to_clipboard(&entry.password)?;
+                    copy_to_clipboard(entry.password_str())?;
                     println!("✓ Password copied to clipboard!");
                 }
             }
@@ -240,11 +241,11 @@ fn handle_list(vault_file: Option<&str>, search: Option<&str>, verbose: bool) ->
         if verbose {
             println!("{}. {}", i + 1, id);
             println!("   Username: {}", entry.username);
-            println!("   Password: {}", "*".repeat(entry.password.len().min(12)));
+            println!("   Password: {}", "*".repeat(entry.password_str().len().min(12)));
             if let Some(note) = &entry.note {
                 println!("   Note: {}", note);
             }
-            let (strength, _) = analyze_password_strength(&entry.password);
+            let (strength, _) = analyze_password_strength(entry.password_str());
             println!("   Strength: {}", strength);
             println!();
         } else {
@@ -302,8 +303,8 @@ fn handle_check(password: Option<&str>, all: bool, vault_file: Option<&str>) -> 
         entries.sort();
 
         for id in entries {
-            let entry = vault.get_entry(&id).unwrap();
-            let (strength, suggestions) = analyze_password_strength(&entry.password);
+            let entry = vault.get_entry(id).unwrap();
+            let (strength, suggestions) = analyze_password_strength(entry.password_str());
             
             let status_icon = if suggestions.is_empty() { "✓" } else { "⚠" };
             println!("{} {} - {}", status_icon, id, strength);
@@ -397,7 +398,7 @@ fn handle_edit(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>>
     let username = if new_username.is_empty() { entry.username.clone() } else { new_username };
 
     // Edit password
-    println!("Current password: {}", "*".repeat(entry.password.len().min(16)));
+    println!("Current password: {}", "*".repeat(entry.password_str().len().min(16)));
     let password_choice = read_line_optional("Change password? (y/N/g for generate): ")?;
     let password = match password_choice.to_lowercase().as_str() {
         "y" | "yes" => {
@@ -421,7 +422,7 @@ fn handle_edit(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>>
             println!("Password strength: {}", strength);
             generated
         }
-        _ => entry.password.clone(),
+        _ => entry.password_str().to_string(),
     };
 
     // Edit note

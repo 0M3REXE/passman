@@ -1,23 +1,63 @@
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
+use crate::secure_types::{SerializableSecret, OptionalSecret};
 
 const CURRENT_VERSION: u32 = 1;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+/// A password entry with secure memory handling for sensitive fields.
+/// 
+/// The `password` and `totp_secret` fields use secure types that:
+/// - Automatically zeroize memory on drop
+/// - Show [REDACTED] in debug output to prevent accidental logging
+/// - Require explicit access via `.expose_secret()`
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Entry {
     pub username: String,
-    pub password: String,
+    /// Password stored securely - auto-zeroizes on drop, Debug shows [REDACTED]
+    pub password: SerializableSecret,
     pub note: Option<String>,
     // New fields for enhanced functionality
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub modified_at: chrono::DateTime<chrono::Utc>,
     pub tags: Vec<String>,
     pub url: Option<String>,
-    pub totp_secret: Option<String>, // For 2FA support
+    /// TOTP secret stored securely - auto-zeroizes on drop
+    pub totp_secret: OptionalSecret,
+}
+
+// Custom Debug implementation to prevent accidental logging of secrets
+impl std::fmt::Debug for Entry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Entry")
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .field("note", &self.note)
+            .field("created_at", &self.created_at)
+            .field("modified_at", &self.modified_at)
+            .field("tags", &self.tags)
+            .field("url", &self.url)
+            .field("totp_secret", &self.totp_secret)
+            .finish()
+    }
 }
 
 impl Entry {
     pub fn new(username: String, password: String, note: Option<String>) -> Self {
+        let now = chrono::Utc::now();
+        Self {
+            username,
+            password: SerializableSecret::new(password),
+            note,
+            created_at: now,
+            modified_at: now,
+            tags: Vec::new(),
+            url: None,
+            totp_secret: OptionalSecret::none(),
+        }
+    }
+    
+    /// Create entry from already-secure password (for internal use)
+    pub fn new_secure(username: String, password: SerializableSecret, note: Option<String>) -> Self {
         let now = chrono::Utc::now();
         Self {
             username,
@@ -27,8 +67,22 @@ impl Entry {
             modified_at: now,
             tags: Vec::new(),
             url: None,
-            totp_secret: None,
-        }    }
+            totp_secret: OptionalSecret::none(),
+        }
+    }
+    
+    /// Get password as string slice (convenience method)
+    /// 
+    /// This explicitly exposes the secret - use with care and
+    /// avoid storing the result in intermediate variables.
+    pub fn password_str(&self) -> &str {
+        self.password.expose_secret()
+    }
+    
+    /// Get TOTP secret as string slice if present
+    pub fn totp_secret_str(&self) -> Option<&str> {
+        self.totp_secret.expose_secret()
+    }
     
     #[allow(dead_code)]
     pub fn update(&mut self) {
@@ -48,6 +102,12 @@ pub struct VaultMetadata {
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_accessed: chrono::DateTime<chrono::Utc>,
     pub description: Option<String>,
+}
+
+impl Default for Vault {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Vault {
@@ -102,7 +162,7 @@ mod tests {
         );
         
         assert_eq!(entry.username, "user@example.com");
-        assert_eq!(entry.password, "secret123");
+        assert_eq!(entry.password.expose_secret(), "secret123");
         assert_eq!(entry.note, Some("My note".to_string()));
         assert!(entry.tags.is_empty());
         assert!(entry.url.is_none());
@@ -206,7 +266,7 @@ mod tests {
         let deserialized: Entry = serde_json::from_str(&json).expect("Deserialization should succeed");
         
         assert_eq!(entry.username, deserialized.username);
-        assert_eq!(entry.password, deserialized.password);
+        assert_eq!(entry.password.expose_secret(), deserialized.password.expose_secret());
         assert_eq!(entry.note, deserialized.note);
     }
     
@@ -231,6 +291,22 @@ mod tests {
         
         let entry = vault.get_entry("key").expect("Entry should exist");
         assert_eq!(entry.username, "user2");
-        assert_eq!(entry.password, "pass2");
+        assert_eq!(entry.password.expose_secret(), "pass2");
+    }
+    
+    #[test]
+    fn test_entry_debug_redacted() {
+        let entry = Entry::new(
+            "user@example.com".to_string(),
+            "super_secret_password".to_string(),
+            None,
+        );
+        
+        let debug_output = format!("{:?}", entry);
+        
+        // Password should NOT appear in debug output
+        assert!(!debug_output.contains("super_secret_password"));
+        // REDACTED should appear
+        assert!(debug_output.contains("REDACTED"));
     }
 }
