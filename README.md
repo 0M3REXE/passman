@@ -105,7 +105,7 @@ passman rm github
 
 
 ## License
-![Visitor Count](https://komarev.com/ghpvc/?username=0M3REXE&repo=your-repo&style=for-the-badge&color=brightgreen)
+![Visitor Count](https://komarev.com/ghpvc/?username=0M3REXE&repo=passman&style=for-the-badge&color=brightgreen)
 
 
 This project is licensed under the MIT License.
