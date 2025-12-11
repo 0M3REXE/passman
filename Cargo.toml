@@ -46,7 +46,7 @@ rfd = "0.15"  # Native file dialogs
 open = "5"    # Open URLs in browser
 # Windows-specific dependencies
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.52", features = ["Win32_System_Memory", "Win32_Foundation"] }
+windows = { version = "0.52", features = ["Win32_System_Memory", "Win32_Foundation", "Win32_System_Console", "Win32_Storage_FileSystem"] }
 
 # Unix-specific dependencies  
 [target.'cfg(unix)'.dependencies]

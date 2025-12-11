@@ -1,5 +1,5 @@
-// Hide console window on Windows in release builds when running GUI
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Note: We don't use windows_subsystem = "windows" because we need CLI support
+// Instead, we detach from console when running GUI mode on Windows
 
 mod cli;
 mod crypto;
@@ -43,10 +43,19 @@ fn main() -> Result<(), eframe::Error> {
     let args: Vec<String> = std::env::args().collect();
     
     if args.len() > 1 {
-        // Run CLI mode for backward compatibility
+        // Run CLI mode - console stays attached for I/O
         log::debug!("Running in CLI mode");
         run_cli();
         return Ok(());
+    }
+
+    // GUI mode - detach from console on Windows so no console window appears
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Console::FreeConsole;
+        unsafe {
+            let _ = FreeConsole();
+        }
     }
 
     // Run GUI mode
@@ -67,6 +76,18 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 fn run_cli() {
+    // Print ASCII art banner
+    println!(r#"
+  _____                                    
+ |  __ \                                   
+ | |__) |_ _ ___ ___ _ __ ___   __ _ _ __  
+ |  ___/ _` / __/ __| '_ ` _ \ / _` | '_ \ 
+ | |  | (_| \__ \__ \ | | | | | (_| | | | |
+ |_|   \__,_|___/___/_| |_| |_|\__,_|_| |_|
+                                           
+    Secure Password Manager v1.0
+"#);
+
     let cli = Cli::parse();
     let vault_file = cli.vault.as_deref();    let result = match cli.command {
         Commands::Init { description: _ } => handle_init(vault_file),
