@@ -17,22 +17,22 @@ impl PassmanApp {
         let border_color = theme::border_color(&current_theme);
         
         ui.vertical_centered(|ui| {
-            ui.add_space(40.0);
+            ui.add_space(20.0);
             
             // ════════════════════════════════════════════════════════════════
             // LOGO / BRANDING
             // ════════════════════════════════════════════════════════════════
-            ui.label(egui::RichText::new("🔐").size(64.0));
-            ui.add_space(12.0);
-            ui.label(egui::RichText::new("Passman").size(32.0).strong());
-            ui.add_space(4.0);
+            ui.label(egui::RichText::new("🔐").size(48.0));
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new("Passman").size(28.0).strong());
+            ui.add_space(2.0);
             ui.label(
                 egui::RichText::new("Secure Password Manager")
-                    .size(14.0)
+                    .size(13.0)
                     .color(muted_color)
             );
             
-            ui.add_space(40.0);
+            ui.add_space(24.0);
             
             // ════════════════════════════════════════════════════════════════
             // MAIN CARD
@@ -40,10 +40,10 @@ impl PassmanApp {
             egui::Frame::none()
                 .fill(frame_fill)
                 .stroke(egui::Stroke::new(1.0, border_color))
-                .rounding(egui::Rounding::same(16.0))
-                .inner_margin(egui::Margin::same(32.0))
+                .rounding(egui::Rounding::same(12.0))
+                .inner_margin(egui::Margin::same(24.0))
                 .show(ui, |ui| {
-                    ui.set_width(320.0);
+                    ui.set_width(300.0);
                     
                     // Vault file selection
                     ui.vertical_centered(|ui| {
@@ -52,9 +52,9 @@ impl PassmanApp {
                     ui.add_space(8.0);
                     
                     ui.vertical_centered(|ui| {
-                        let btn_width = 260.0;
-                        let field_height = 32.0;
-                        let browse_btn_size = 36.0;
+                        let btn_width = 250.0;
+                        let field_height = 30.0;
+                        let browse_btn_size = 34.0;
                         let gap = 4.0;
                         let field_width = btn_width - browse_btn_size - gap;
                         
@@ -88,14 +88,14 @@ impl PassmanApp {
                         );
                     });
                     
-                    ui.add_space(24.0);
+                    ui.add_space(18.0);
                     
                     // Action buttons
                     let vault_exists = VaultManager::exists(Some(&self.vault_file));
                     
                     ui.vertical_centered(|ui| {
-                        let btn_width = 260.0;
-                        let btn_height = 44.0;
+                        let btn_width = 250.0;
+                        let btn_height = 38.0;
                         
                         if vault_exists {
                             // Open existing vault (primary)
@@ -110,11 +110,11 @@ impl PassmanApp {
                                 self.current_screen = Screen::Login;
                             }
                             
-                            ui.add_space(12.0);
+                            ui.add_space(8.0);
                             
                             // Create new vault (secondary)
                             let create_btn = egui::Button::new(
-                                egui::RichText::new("Create New Vault").size(14.0)
+                                egui::RichText::new("Create New Vault").size(13.0)
                             )
                             .fill(egui::Color32::TRANSPARENT)
                             .stroke(egui::Stroke::new(1.0, border_color))
@@ -147,7 +147,7 @@ impl PassmanApp {
                     });
                 });
             
-            ui.add_space(16.0);
+            ui.add_space(12.0);
             
             // ════════════════════════════════════════════════════════════════
             // BOTTOM ACTIONS
@@ -155,18 +155,18 @@ impl PassmanApp {
             ui.horizontal(|ui| {
                 // Settings button
                 if ui.add(
-                    egui::Button::new(egui::RichText::new("⚙ Settings").size(12.0).color(muted_color))
+                    egui::Button::new(egui::RichText::new("⚙ Settings").size(11.0).color(muted_color))
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::NONE)
                 ).clicked() {
                     self.current_screen = Screen::Settings;
                 }
                 
-                ui.add_space(12.0);
+                ui.add_space(8.0);
                 
                 // Help button
                 if ui.add(
-                    egui::Button::new(egui::RichText::new("❓ Help").size(12.0).color(muted_color))
+                    egui::Button::new(egui::RichText::new("❓ Help").size(11.0).color(muted_color))
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::NONE)
                 ).clicked() {
@@ -174,11 +174,11 @@ impl PassmanApp {
                     self.onboarding_step = 0;
                 }
                 
-                ui.add_space(12.0);
+                ui.add_space(8.0);
                 
                 // Troubleshooting menu
                 ui.menu_button(
-                    egui::RichText::new("🔧 Troubleshoot").size(12.0).color(muted_color),
+                    egui::RichText::new("🔧 Troubleshoot").size(11.0).color(muted_color),
                     |ui| {
                         if ui.button("Reset to default vault").clicked() {
                             self.vault_file = "vault.dat".to_string();
@@ -201,11 +201,29 @@ impl PassmanApp {
                 );
             });
             
-            // Version info at bottom
-            ui.add_space(8.0);
+            // Credit section at bottom
+            ui.add_space(12.0);
+            ui.label(
+                egui::RichText::new("Created by 0M3REXE")
+                    .size(10.0)
+                    .color(egui::Color32::from_rgb(100, 100, 105))
+            );
+            ui.add_space(2.0);
+            if ui.add(
+                egui::Button::new(
+                    egui::RichText::new("github.com/0M3REXE/passman")
+                        .size(10.0)
+                        .color(egui::Color32::from_rgb(100, 149, 237))
+                )
+                .fill(egui::Color32::TRANSPARENT)
+                .stroke(egui::Stroke::NONE)
+            ).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                let _ = open::that("https://github.com/0M3REXE/passman");
+            }
+            ui.add_space(2.0);
             ui.label(
                 egui::RichText::new("v1.0.0")
-                    .size(11.0)
+                    .size(9.0)
                     .color(egui::Color32::from_rgb(80, 80, 85))
             );
         });
@@ -332,57 +350,57 @@ impl PassmanApp {
         let border_color = theme::border_color(&current_theme);
         
         ui.vertical_centered(|ui| {
-            ui.add_space(40.0);
+            ui.add_space(20.0);
             
             // Header
-            ui.label(egui::RichText::new("🔐").size(48.0));
-            ui.add_space(8.0);
-            ui.label(egui::RichText::new("Welcome Back").size(24.0).strong());
-            ui.add_space(4.0);
+            ui.label(egui::RichText::new("🔐").size(40.0));
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new("Welcome Back").size(22.0).strong());
+            ui.add_space(2.0);
             ui.label(
                 egui::RichText::new("Enter your master password to unlock")
-                    .size(13.0)
+                    .size(12.0)
                     .color(muted_color)
             );
             
-            ui.add_space(32.0);
+            ui.add_space(20.0);
             
             // Form card
             egui::Frame::none()
                 .fill(frame_fill)
                 .stroke(egui::Stroke::new(1.0, border_color))
-                .rounding(egui::Rounding::same(16.0))
-                .inner_margin(egui::Margin::same(32.0))
+                .rounding(egui::Rounding::same(12.0))
+                .inner_margin(egui::Margin::same(24.0))
                 .show(ui, |ui| {
-                    ui.set_width(320.0);
+                    ui.set_width(280.0);
                     
-                    let btn_width = 260.0;
+                    let btn_width = 240.0;
                     
                     // Master password
                     ui.vertical_centered(|ui| {
-                        ui.label(egui::RichText::new("Master Password").size(13.0).strong());
+                        ui.label(egui::RichText::new("Master Password").size(12.0).strong());
                     });
                     ui.add_space(6.0);
                     
                     ui.vertical_centered(|ui| {
                         ui.add_sized(
-                            egui::vec2(btn_width, 32.0),
+                            egui::vec2(btn_width, 30.0),
                             egui::TextEdit::singleline(&mut *self.login_password)
                                 .password(true)
                                 .hint_text("Enter your password")
                         );
                     });
                     
-                    ui.add_space(24.0);
+                    ui.add_space(18.0);
                     
                     // Buttons
                     ui.vertical_centered(|ui| {
                         let open_btn = egui::Button::new(
-                            egui::RichText::new("Unlock").size(14.0).color(egui::Color32::WHITE)
+                            egui::RichText::new("Unlock").size(13.0).color(egui::Color32::WHITE)
                         )
                         .fill(egui::Color32::from_rgb(59, 130, 246))
-                        .rounding(egui::Rounding::same(10.0))
-                        .min_size(egui::vec2(btn_width, 44.0));
+                        .rounding(egui::Rounding::same(8.0))
+                        .min_size(egui::vec2(btn_width, 36.0));
                         
                         if ui.add(open_btn).clicked() {
                             match self.login() {
@@ -395,15 +413,15 @@ impl PassmanApp {
                             }
                         }
                         
-                        ui.add_space(12.0);
+                        ui.add_space(8.0);
                         
                         let back_btn = egui::Button::new(
-                            egui::RichText::new("Back").size(13.0)
+                            egui::RichText::new("Back").size(12.0)
                         )
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(10.0))
-                        .min_size(egui::vec2(btn_width, 44.0));
+                        .rounding(egui::Rounding::same(8.0))
+                        .min_size(egui::vec2(btn_width, 36.0));
                         
                         if ui.add(back_btn).clicked() {
                             self.current_screen = Screen::Welcome;
@@ -413,10 +431,10 @@ impl PassmanApp {
                 });
             
             // Vault info
-            ui.add_space(24.0);
+            ui.add_space(16.0);
             ui.label(
                 egui::RichText::new(format!("📁 {}", self.vault_file))
-                    .size(11.0)
+                    .size(10.0)
                     .color(egui::Color32::from_rgb(80, 80, 85))
             );
         });

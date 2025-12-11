@@ -278,6 +278,45 @@ impl PassmanApp {
                     ui.add_space(16.0);
                 }
                 
+                // ════════════════════════════════════════════════════════════════
+                // ABOUT SECTION
+                // ════════════════════════════════════════════════════════════════
+                egui::Frame::none()
+                    .fill(frame_fill)
+                    .stroke(egui::Stroke::new(1.0, border_color))
+                    .rounding(egui::Rounding::same(12.0))
+                    .inner_margin(egui::Margin::same(20.0))
+                    .show(ui, |ui| {
+                        ui.set_width(card_width);
+                        
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("About").size(14.0).strong());
+                        });
+                        
+                        ui.add_space(12.0);
+                        
+                        ui.vertical_centered(|ui| {
+                            ui.label(egui::RichText::new("Passman").size(16.0).strong());
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new("A secure password manager")
+                                    .size(12.0)
+                                    .color(muted_color)
+                            );
+                            ui.add_space(12.0);
+                            
+                            ui.label(
+                                egui::RichText::new("Created by 0M3REXE")
+                                    .size(12.0)
+                            );
+                            ui.add_space(8.0);
+                            
+                            if ui.link("github.com/0M3REXE/passman").clicked() {
+                                let _ = open::that("https://github.com/0M3REXE/passman");
+                            }
+                        });
+                    });
+                
                 ui.add_space(SPACING * 2.0);
             });
         });
