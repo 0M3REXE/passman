@@ -76,18 +76,6 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 fn run_cli() {
-    // Print ASCII art banner
-    println!(r#"
-  _____                                    
- |  __ \                                   
- | |__) |_ _ ___ ___ _ __ ___   __ _ _ __  
- |  ___/ _` / __/ __| '_ ` _ \ / _` | '_ \ 
- | |  | (_| \__ \__ \ | | | | | (_| | | | |
- |_|   \__,_|___/___/_| |_| |_|\__,_|_| |_|
-                                           
-    Secure Password Manager v1.0
-"#);
-
     let cli = Cli::parse();
     let vault_file = cli.vault.as_deref();    let result = match cli.command {
         Commands::Init { description: _ } => handle_init(vault_file),

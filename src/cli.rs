@@ -1,8 +1,22 @@
 use clap::{Parser, Subcommand};
 
+const BANNER: &str = r#"
+  _____                                    
+ |  __ \                                   
+ | |__) |_ _ ___ ___ _ __ ___   __ _ _ __  
+ |  ___/ _` / __/ __| '_ ` _ \ / _` | '_ \ 
+ | |  | (_| \__ \__ \ | | | | | (_| | | | |
+ |_|   \__,_|___/___/_| |_| |_|\__,_|_| |_|
+                                           
+    Secure Password Manager v1.0
+
+A rapid fast password manager built with Rust.
+Features AES-256-GCM encryption and Argon2 key derivation.
+"#;
+
 #[derive(Parser)]
 #[command(name = "passman", version = "1.0", author = "0m3rexe")]
-#[command(about = "A rapid fast password manager built with rust", long_about = None)]
+#[command(about = BANNER, long_about = BANNER)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
