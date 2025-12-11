@@ -225,20 +225,22 @@ pub fn render_onboarding(
             ui.add_space(SPACING * 2.0);
             
             ui.horizontal(|ui| {
-                if *onboarding_step > 0 && ButtonWidgets::secondary(ui, "← Back", [80.0, BUTTON_HEIGHT]).clicked() {
+                let btn_width = 90.0;
+                
+                if *onboarding_step > 0 && ButtonWidgets::secondary(ui, "Back", [btn_width, BUTTON_HEIGHT]).clicked() {
                     *onboarding_step -= 1;
                 }
                 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if *onboarding_step < 3 {
-                        if ButtonWidgets::primary(ui, "Next →", [80.0, BUTTON_HEIGHT]).clicked() {
+                        if ButtonWidgets::primary(ui, "Next", [btn_width, BUTTON_HEIGHT]).clicked() {
                             *onboarding_step += 1;
                         }
-                    } else if ButtonWidgets::success(ui, "Get Started", [100.0, BUTTON_HEIGHT]).clicked() {
-                        *show_onboarding = false;
-                    }
-                    
-                    if *onboarding_step < 3 && ui.small_button("Skip").clicked() {
+                        
+                        if ButtonWidgets::secondary(ui, "Skip", [btn_width, BUTTON_HEIGHT]).clicked() {
+                            *show_onboarding = false;
+                        }
+                    } else if ButtonWidgets::success(ui, "Get Started", [110.0, BUTTON_HEIGHT]).clicked() {
                         *show_onboarding = false;
                     }
                 });

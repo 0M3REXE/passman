@@ -1,3 +1,6 @@
+// Hide console window on Windows in release builds when running GUI
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod cli;
 mod crypto;
 mod vault;
