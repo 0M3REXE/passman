@@ -275,12 +275,14 @@ impl PassmanApp {
                     
                     // Buttons
                     ui.vertical_centered(|ui| {
+                        let btn_width = 260.0;
+                        
                         let create_btn = egui::Button::new(
                             egui::RichText::new("Create Vault").size(14.0).color(egui::Color32::WHITE)
                         )
                         .fill(egui::Color32::from_rgb(34, 197, 94))
                         .rounding(egui::Rounding::same(10.0))
-                        .min_size(egui::vec2(260.0, 44.0));
+                        .min_size(egui::vec2(btn_width, 44.0));
                         
                         if ui.add(create_btn).clicked() {
                             match self.init_vault() {
@@ -295,11 +297,15 @@ impl PassmanApp {
                         
                         ui.add_space(12.0);
                         
-                        if ui.add(
-                            egui::Button::new(egui::RichText::new("← Back").color(muted_color))
-                                .fill(egui::Color32::TRANSPARENT)
-                                .stroke(egui::Stroke::NONE)
-                        ).clicked() {
+                        let back_btn = egui::Button::new(
+                            egui::RichText::new("Back").size(13.0)
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::new(1.0, border_color))
+                        .rounding(egui::Rounding::same(10.0))
+                        .min_size(egui::vec2(btn_width, 44.0));
+                        
+                        if ui.add(back_btn).clicked() {
                             self.current_screen = Screen::Welcome;
                             *self.init_password = String::new();
                             *self.init_confirm = String::new();
@@ -350,39 +356,33 @@ impl PassmanApp {
                 .show(ui, |ui| {
                     ui.set_width(320.0);
                     
+                    let btn_width = 260.0;
+                    
                     // Master password
-                    ui.label(egui::RichText::new("Master Password").size(13.0).strong());
+                    ui.vertical_centered(|ui| {
+                        ui.label(egui::RichText::new("Master Password").size(13.0).strong());
+                    });
                     ui.add_space(6.0);
                     
-                    let password_input = ui.add(
-                        egui::TextEdit::singleline(&mut *self.login_password)
-                            .password(true)
-                            .hint_text("Enter your password")
-                            .desired_width(280.0)
-                    );
-                    
-                    // Submit on Enter
-                    if password_input.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        match self.login() {
-                            Ok(()) => {
-                                self.toast_success("Vault opened successfully!");
-                            }
-                            Err(e) => {
-                                self.toast_error(e);
-                            }
-                        }
-                    }
+                    ui.vertical_centered(|ui| {
+                        ui.add_sized(
+                            egui::vec2(btn_width, 32.0),
+                            egui::TextEdit::singleline(&mut *self.login_password)
+                                .password(true)
+                                .hint_text("Enter your password")
+                        );
+                    });
                     
                     ui.add_space(24.0);
                     
                     // Buttons
                     ui.vertical_centered(|ui| {
                         let open_btn = egui::Button::new(
-                            egui::RichText::new("🔓  Unlock").size(14.0).color(egui::Color32::WHITE)
+                            egui::RichText::new("Unlock").size(14.0).color(egui::Color32::WHITE)
                         )
                         .fill(egui::Color32::from_rgb(59, 130, 246))
                         .rounding(egui::Rounding::same(10.0))
-                        .min_size(egui::vec2(260.0, 44.0));
+                        .min_size(egui::vec2(btn_width, 44.0));
                         
                         if ui.add(open_btn).clicked() {
                             match self.login() {
@@ -397,11 +397,15 @@ impl PassmanApp {
                         
                         ui.add_space(12.0);
                         
-                        if ui.add(
-                            egui::Button::new(egui::RichText::new("← Back").color(muted_color))
-                                .fill(egui::Color32::TRANSPARENT)
-                                .stroke(egui::Stroke::NONE)
-                        ).clicked() {
+                        let back_btn = egui::Button::new(
+                            egui::RichText::new("Back").size(13.0)
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::new(1.0, border_color))
+                        .rounding(egui::Rounding::same(10.0))
+                        .min_size(egui::vec2(btn_width, 44.0));
+                        
+                        if ui.add(back_btn).clicked() {
                             self.current_screen = Screen::Welcome;
                             *self.login_password = String::new();
                         }

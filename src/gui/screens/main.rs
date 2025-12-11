@@ -49,7 +49,7 @@ impl PassmanApp {
                         ui.spacing_mut().item_spacing.x = 8.0;
                         
                         // Lock button
-                        if self.secondary_button(ui, "🔒 Lock", [75.0, 32.0]).clicked() {
+                        if self.secondary_button(ui, "Lock", [65.0, 32.0]).clicked() {
                             self.lock_vault();
                             self.toast_info("Vault locked".to_string());
                         }
@@ -62,19 +62,19 @@ impl PassmanApp {
                         ui.add_space(4.0);
                         
                         // Health dashboard
-                        if self.primary_button(ui, "🏥 Health", [85.0, 32.0]).clicked() {
+                        if self.primary_button(ui, "Health", [70.0, 32.0]).clicked() {
                             self.current_screen = Screen::HealthDashboard;
                         }
                         
                         // Export
-                        if self.secondary_button(ui, "📦 Export", [85.0, 32.0]).clicked() {
+                        if self.secondary_button(ui, "Export", [70.0, 32.0]).clicked() {
                             self.current_screen = Screen::ImportExport;
                         }
                         
                         ui.add_space(4.0);
                         
                         // Add button (prominent)
-                        if self.success_button(ui, "＋ Add", [75.0, 32.0]).clicked() {
+                        if self.success_button(ui, "+ Add", [65.0, 32.0]).clicked() {
                             self.current_screen = Screen::AddEntry;
                             self.clear_add_form();
                         }

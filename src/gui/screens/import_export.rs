@@ -32,7 +32,13 @@ impl PassmanApp {
                     ui.label(egui::RichText::new("Import / Export").size(20.0).strong());
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if self.secondary_button(ui, "← Back", [80.0, 32.0]).clicked() {
+                        let back_btn = egui::Button::new("Back")
+                            .fill(egui::Color32::from_rgb(55, 65, 81))
+                            .stroke(egui::Stroke::new(1.0, border_color))
+                            .rounding(egui::Rounding::same(6.0))
+                            .min_size(egui::vec2(70.0, 28.0));
+                        
+                        if ui.add(back_btn).clicked() {
                             self.current_screen = Screen::Main;
                         }
                     });

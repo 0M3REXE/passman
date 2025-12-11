@@ -3,20 +3,47 @@
 //! Password health analysis and recommendations.
 
 use eframe::egui;
-use super::super::types::{Screen, SPACING, PADDING, BUTTON_HEIGHT};
+use super::super::types::{Screen, SPACING};
+use super::super::theme;
 use super::super::app::PassmanApp;
 
 impl PassmanApp {
     /// Show password health dashboard
     pub fn show_health_dashboard(&mut self, ui: &mut egui::Ui) {
-        ui.vertical(|ui| {
-            ui.heading("Password Health Dashboard");
-        });
-        ui.separator();
-        ui.add_space(PADDING);
+        let current_theme = self.current_theme.clone();
+        let border_color = theme::border_color(&current_theme);
+        
+        // ════════════════════════════════════════════════════════════════════
+        // HEADER BAR
+        // ════════════════════════════════════════════════════════════════════
+        egui::Frame::none()
+            .fill(theme::header_bg_color(&current_theme))
+            .inner_margin(egui::Margin::symmetric(16.0, 12.0))
+            .rounding(egui::Rounding::same(10.0))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("🏥").size(20.0));
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("Health Dashboard").size(18.0).strong());
+                    
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let back_btn = egui::Button::new("Back")
+                            .fill(egui::Color32::from_rgb(55, 65, 81))
+                            .stroke(egui::Stroke::new(1.0, border_color))
+                            .rounding(egui::Rounding::same(6.0))
+                            .min_size(egui::vec2(70.0, 28.0));
+                        
+                        if ui.add(back_btn).clicked() {
+                            self.current_screen = Screen::Main;
+                        }
+                    });
+                });
+            });
+        
+        ui.add_space(SPACING);
 
-        ui.vertical_centered(|ui| {
-            ui.add_space(SPACING * 2.0);
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.vertical_centered(|ui| {
             
             // Generate health summary if we have a vault
             if let Some(vault) = &self.vault {
@@ -71,12 +98,7 @@ impl PassmanApp {
             } else {
                 ui.label("No health data available. Please add entries to analyze.");
             }
-            
-            ui.add_space(SPACING * 2.0);
-            
-            if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() {
-                self.current_screen = Screen::Main;
-            }
+            });
         });
     }
 }

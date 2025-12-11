@@ -8,7 +8,7 @@ use std::time::Instant;
 
 // UI Constants
 pub const BUTTON_HEIGHT: f32 = 36.0;
-pub const INPUT_WIDTH: f32 = 300.0;
+pub const INPUT_WIDTH: f32 = 350.0;
 pub const SPACING: f32 = 10.0;
 pub const PADDING: f32 = 20.0;
 pub const MIN_WINDOW_WIDTH: f32 = 500.0;
@@ -99,22 +99,11 @@ impl Toast {
 pub enum Theme {
     #[default]
     Dark,
-    Light,
 }
 
 impl Theme {
     pub fn name(&self) -> &'static str {
-        match self {
-            Theme::Dark => "Dark",
-            Theme::Light => "Light",
-        }
-    }
-
-    pub fn toggle(&self) -> Self {
-        match self {
-            Theme::Dark => Theme::Light,
-            Theme::Light => Theme::Dark,
-        }
+        "Dark"
     }
 }
 

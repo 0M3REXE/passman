@@ -169,11 +169,8 @@ impl PassmanApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let config = get_config();
         
-        let initial_theme = if config.ui.theme.to_lowercase() == "light" {
-            Theme::Light
-        } else {
-            Theme::Dark
-        };
+        // Dark theme only
+        let initial_theme = Theme::Dark;
         
         let vault_exists = std::path::Path::new(&config.general.default_vault).exists();
 
@@ -357,6 +354,10 @@ impl PassmanApp {
     }
 
     pub fn login(&mut self) -> Result<(), String> {
+        if self.login_password.trim().is_empty() {
+            return Err("Please enter your master password".into());
+        }
+        
         if self.security_manager.is_locked_out() {
             let remaining = self.security_manager.lockout_remaining_secs();
             return Err(format!("Account locked. Please wait {} seconds.", remaining));
