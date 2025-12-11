@@ -11,6 +11,15 @@
 
 A modern password manager written in Rust with both GUI and CLI interfaces, featuring AES-256-GCM encryption and Argon2 key derivation.
 
+## Screenshots
+![Welcome Page](<Screenshot 2025-12-11 191320.png>)
+![Welcome page 2](<Screenshot 2025-12-11 191338.png>)
+![Create New Vault](<Screenshot 2025-12-11 191649.png>)
+![Password Vault](<Screenshot 2025-12-11 191452.png>)
+![Adding New Entry](<Screenshot 2025-12-11 191503.png>)
+![Adding New Entry 1](<Screenshot 2025-12-11 191534.png>)
+![Password Vault with Entry](<Screenshot 2025-12-11 191544.png>)
+
 ## Features
 
 - **Dual Interface**: Modern GUI and powerful CLI interface
@@ -93,6 +102,7 @@ passman rm github
 - **Encryption**: All data is encrypted using AES-256-GCM
 - **Key Derivation**: Uses Argon2 for secure key derivation from passwords
 - **No Plaintext Storage**: Passwords are never stored in plaintext
+
 
 ## License
 ![Visitor Count](https://komarev.com/ghpvc/?username=0M3REXE&repo=your-repo&style=for-the-badge&color=brightgreen)
