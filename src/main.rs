@@ -10,6 +10,8 @@ mod secure_clipboard;
 mod session;
 mod error;
 mod config;
+mod logging;
+mod core;
 
 use eframe::egui;
 use cli::{Cli, Commands, TransferCommands, ConfigCommands};
@@ -23,13 +25,22 @@ use zeroize::Zeroizing;
 // Re-export commonly used types
 pub use error::{PassmanError, PassmanResult};
 pub use config::Config;
+pub use core::{PassmanCore, EntryBuilder};
+
 
 fn main() -> Result<(), eframe::Error> {
+    // Initialize logging from config
+    if let Err(e) = logging::init_from_config() {
+        eprintln!("Warning: Failed to initialize logging: {}", e);
+    }
+    log::info!("Passman starting...");
+    
     // Check if CLI arguments are provided
     let args: Vec<String> = std::env::args().collect();
     
     if args.len() > 1 {
         // Run CLI mode for backward compatibility
+        log::debug!("Running in CLI mode");
         run_cli();
         return Ok(());
     }

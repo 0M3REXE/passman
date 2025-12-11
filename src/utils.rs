@@ -299,3 +299,239 @@ pub fn generate_memorable_password(word_count: usize) -> String {
         .collect::<Vec<_>>()
         .join("")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ============ Password Generation Tests ============
+    
+    #[test]
+    fn test_generate_password_length() {
+        for length in [8, 12, 16, 20, 32, 64] {
+            let password = generate_password(length);
+            assert_eq!(password.len(), length, "Password should be {} chars", length);
+        }
+    }
+
+    #[test]
+    fn test_generate_password_uniqueness() {
+        let passwords: Vec<String> = (0..100).map(|_| generate_password(16)).collect();
+        let unique_count = passwords.iter().collect::<std::collections::HashSet<_>>().len();
+        assert_eq!(unique_count, 100, "All generated passwords should be unique");
+    }
+
+    #[test]
+    fn test_generate_password_with_config_lowercase_only() {
+        let config = PasswordConfig {
+            include_lowercase: true,
+            include_uppercase: false,
+            include_numbers: false,
+            include_symbols: false,
+            exclude_ambiguous: false,
+        };
+        let password = generate_password_with_config(20, &config);
+        assert!(password.chars().all(|c| c.is_ascii_lowercase()),
+            "Password should contain only lowercase: {}", password);
+    }
+
+    #[test]
+    fn test_generate_password_with_config_uppercase_only() {
+        let config = PasswordConfig {
+            include_lowercase: false,
+            include_uppercase: true,
+            include_numbers: false,
+            include_symbols: false,
+            exclude_ambiguous: false,
+        };
+        let password = generate_password_with_config(20, &config);
+        assert!(password.chars().all(|c| c.is_ascii_uppercase()),
+            "Password should contain only uppercase: {}", password);
+    }
+
+    #[test]
+    fn test_generate_password_with_config_numbers_only() {
+        let config = PasswordConfig {
+            include_lowercase: false,
+            include_uppercase: false,
+            include_numbers: true,
+            include_symbols: false,
+            exclude_ambiguous: false,
+        };
+        let password = generate_password_with_config(20, &config);
+        assert!(password.chars().all(|c| c.is_ascii_digit()),
+            "Password should contain only numbers: {}", password);
+    }
+
+    #[test]
+    fn test_generate_password_with_config_exclude_ambiguous() {
+        let config = PasswordConfig {
+            include_lowercase: true,
+            include_uppercase: true,
+            include_numbers: true,
+            include_symbols: false,
+            exclude_ambiguous: true,
+        };
+        let ambiguous_chars = ['0', 'O', '1', 'l', 'I'];
+        
+        // Generate multiple passwords to ensure ambiguous chars are excluded
+        for _ in 0..50 {
+            let password = generate_password_with_config(32, &config);
+            assert!(!password.chars().any(|c| ambiguous_chars.contains(&c)),
+                "Password should not contain ambiguous chars: {}", password);
+        }
+    }
+
+    #[test]
+    fn test_generate_password_with_config_all_types() {
+        let config = PasswordConfig {
+            include_lowercase: true,
+            include_uppercase: true,
+            include_numbers: true,
+            include_symbols: true,
+            exclude_ambiguous: false,
+        };
+        
+        // Generate several passwords to check they contain all types
+        let password = generate_password_with_config(32, &config);
+        assert!(password.chars().any(|c| c.is_ascii_lowercase()), "Should have lowercase");
+        assert!(password.chars().any(|c| c.is_ascii_uppercase()), "Should have uppercase");
+        assert!(password.chars().any(|c| c.is_ascii_digit()), "Should have numbers");
+        assert!(password.chars().any(|c| !c.is_alphanumeric()), "Should have symbols");
+    }
+
+    #[test]
+    fn test_generate_password_empty_config_fallback() {
+        let config = PasswordConfig {
+            include_lowercase: false,
+            include_uppercase: false,
+            include_numbers: false,
+            include_symbols: false,
+            exclude_ambiguous: false,
+        };
+        let password = generate_password_with_config(16, &config);
+        assert!(!password.is_empty(), "Should fallback to generating something");
+    }
+
+    // ============ Memorable Password Tests ============
+
+    #[test]
+    fn test_generate_memorable_password_word_count() {
+        let password = generate_memorable_password(4);
+        // Each word is capitalized, so count capital letters
+        let capital_count = password.chars().filter(|c| c.is_uppercase()).count();
+        assert_eq!(capital_count, 4, "Should have 4 capitalized words");
+    }
+
+    #[test]
+    fn test_generate_memorable_password_uniqueness() {
+        let passwords: Vec<String> = (0..50).map(|_| generate_memorable_password(4)).collect();
+        let unique_count = passwords.iter().collect::<std::collections::HashSet<_>>().len();
+        assert!(unique_count > 40, "Most passwords should be unique: {}/50", unique_count);
+    }
+
+    #[test]
+    fn test_generate_memorable_password_readable() {
+        let password = generate_memorable_password(3);
+        // Should only contain alphabetic characters (no numbers/symbols)
+        assert!(password.chars().all(|c| c.is_alphabetic()),
+            "Memorable password should be alphabetic: {}", password);
+    }
+
+    // ============ Password Strength Tests ============
+
+    #[test]
+    fn test_password_strength_very_weak() {
+        let (strength, _) = analyze_password_strength("abc");
+        assert_eq!(strength, PasswordStrength::VeryWeak);
+    }
+
+    #[test]
+    fn test_password_strength_weak() {
+        let (strength, _) = analyze_password_strength("password");
+        assert!(matches!(strength, PasswordStrength::VeryWeak | PasswordStrength::Weak),
+            "Common password should be weak: {:?}", strength);
+    }
+
+    #[test]
+    fn test_password_strength_common_password_penalty() {
+        let (strength, suggestions) = analyze_password_strength("password123");
+        assert!(matches!(strength, PasswordStrength::VeryWeak | PasswordStrength::Weak));
+        assert!(suggestions.iter().any(|s| s.contains("common")));
+    }
+
+    #[test]
+    fn test_password_strength_sequential_penalty() {
+        let (_, suggestions) = analyze_password_strength("abc123XYZ!");
+        assert!(suggestions.iter().any(|s| s.contains("sequential")));
+    }
+
+    #[test]
+    fn test_password_strength_repeated_chars_penalty() {
+        let (_, suggestions) = analyze_password_strength("Hellooo123!");
+        assert!(suggestions.iter().any(|s| s.contains("repeating")));
+    }
+
+    #[test]
+    fn test_password_strength_strong() {
+        let (strength, suggestions) = analyze_password_strength("Kj9$mP2!qR5@nL8*");
+        assert_eq!(strength, PasswordStrength::Strong);
+        assert!(suggestions.is_empty() || suggestions.len() <= 1,
+            "Strong password should have few suggestions: {:?}", suggestions);
+    }
+
+    #[test]
+    fn test_password_strength_suggestions_for_missing_types() {
+        let (_, suggestions) = analyze_password_strength("onlylowercase");
+        assert!(suggestions.iter().any(|s| s.contains("uppercase")));
+        assert!(suggestions.iter().any(|s| s.contains("numbers")));
+        assert!(suggestions.iter().any(|s| s.contains("special")));
+    }
+
+    #[test]
+    fn test_password_strength_length_suggestions() {
+        let (_, suggestions) = analyze_password_strength("Ab1!");
+        assert!(suggestions.iter().any(|s| s.contains("8 characters")));
+    }
+
+    // ============ File Utility Tests ============
+
+    #[test]
+    fn test_file_exists_nonexistent() {
+        assert!(!file_exists("/nonexistent/path/to/file.txt"));
+    }
+
+    #[test]
+    fn test_file_exists_current_file() {
+        // This test file should exist
+        assert!(file_exists("Cargo.toml"));
+    }
+
+    #[test]
+    fn test_password_config_default_values() {
+        let config = PasswordConfig {
+            include_uppercase: true,
+            include_lowercase: true,
+            include_numbers: true,
+            include_symbols: true,
+            exclude_ambiguous: false,
+        };
+        
+        assert!(config.include_uppercase);
+        assert!(config.include_lowercase);
+        assert!(config.include_numbers);
+        assert!(config.include_symbols);
+        assert!(!config.exclude_ambiguous);
+    }
+
+    // ============ Password Strength Display Tests ============
+
+    #[test]
+    fn test_password_strength_display() {
+        assert_eq!(format!("{}", PasswordStrength::VeryWeak), "Very Weak");
+        assert_eq!(format!("{}", PasswordStrength::Weak), "Weak");
+        assert_eq!(format!("{}", PasswordStrength::Fair), "Fair");
+        assert_eq!(format!("{}", PasswordStrength::Good), "Good");
+        assert_eq!(format!("{}", PasswordStrength::Strong), "Strong");
+    }
+}
