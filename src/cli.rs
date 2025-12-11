@@ -8,7 +8,7 @@ pub struct Cli {
     pub command: Commands,
     
     /// Specify vault file (default: vault.dat)
-    #[arg(short, long, global = true)]
+    #[arg(long, global = true)]
     pub vault: Option<String>,
     
     /// Verbose output

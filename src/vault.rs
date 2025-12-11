@@ -1,15 +1,75 @@
-use crate::crypto::{derive_key, encrypt_data, decrypt_data};
+//! Vault Management Module
+//! 
+//! Provides secure storage for password entries with:
+//! - AES-256-GCM encryption
+//! - Argon2id key derivation
+//! - HMAC-SHA256 integrity verification
+//! - Atomic file writes to prevent corruption
+
+use crate::crypto::{derive_key, encrypt_data, decrypt_data, Key};
 use crate::model::Vault;
 use argon2::password_hash::SaltString;
-use std::fs::{File, read_dir};
+use std::fs::{self, File, read_dir};
 use std::io::{Write, Read};
 use std::path::Path;
 use zeroize::Zeroizing;
 use std::time::{Duration, Instant};
 use std::thread;
 use sha2::{Sha256, Digest};
+use hmac::{Hmac, Mac};
 
+type HmacSha256 = Hmac<Sha256>;
+
+/// Default vault file name
 const DEFAULT_VAULT_FILE: &str = "vault.dat";
+
+/// Vault file format version
+const VAULT_FORMAT_VERSION: u8 = 2;
+
+/// Magic bytes to identify vault files
+const VAULT_MAGIC: &[u8; 4] = b"PMAN";
+
+/// Vault file header structure
+#[derive(Debug)]
+struct VaultHeader {
+    magic: [u8; 4],
+    version: u8,
+    salt_len: u32,
+}
+
+impl VaultHeader {
+    fn new(salt_len: u32) -> Self {
+        Self {
+            magic: *VAULT_MAGIC,
+            version: VAULT_FORMAT_VERSION,
+            salt_len,
+        }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(9);
+        bytes.extend_from_slice(&self.magic);
+        bytes.push(self.version);
+        bytes.extend_from_slice(&self.salt_len.to_le_bytes());
+        bytes
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < 9 {
+            return None;
+        }
+
+        let magic: [u8; 4] = bytes[0..4].try_into().ok()?;
+        if &magic != VAULT_MAGIC {
+            return None; // Legacy format
+        }
+
+        let version = bytes[4];
+        let salt_len = u32::from_le_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]);
+
+        Some(Self { magic, version, salt_len })
+    }
+}
 
 pub struct VaultManager;
 
@@ -17,13 +77,57 @@ impl VaultManager {
     /// Get the vault file path
     fn get_vault_path(vault_file: Option<&str>) -> &str {
         vault_file.unwrap_or(DEFAULT_VAULT_FILE)
-    }    /// Initialize a new encrypted vault with master password
+    }
+
+    /// Generate HMAC for vault data
+    fn generate_hmac(key: &Key, data: &[u8]) -> Vec<u8> {
+        let mut mac = HmacSha256::new_from_slice(key.as_ref())
+            .expect("HMAC can take key of any size");
+        mac.update(data);
+        mac.finalize().into_bytes().to_vec()
+    }
+
+    /// Verify HMAC for vault data
+    fn verify_hmac(key: &Key, data: &[u8], expected_hmac: &[u8]) -> bool {
+        let mut mac = HmacSha256::new_from_slice(key.as_ref())
+            .expect("HMAC can take key of any size");
+        mac.update(data);
+        mac.verify_slice(expected_hmac).is_ok()
+    }
+
+    /// Write data atomically (write to temp file, then rename)
+    fn atomic_write(path: &str, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+        let temp_path = format!("{}.tmp", path);
+        let backup_path = format!("{}.bak", path);
+
+        // Write to temporary file
+        {
+            let mut file = File::create(&temp_path)?;
+            file.write_all(data)?;
+            file.sync_all()?;
+        }
+
+        // Create backup of existing file if it exists
+        if Path::new(path).exists() {
+            let _ = fs::remove_file(&backup_path);
+            fs::rename(path, &backup_path)?;
+        }
+
+        // Rename temp to final
+        fs::rename(&temp_path, path)?;
+
+        Ok(())
+    }
+
+    /// Initialize a new encrypted vault with master password
     pub fn init(master_password: &Zeroizing<String>, vault_file: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let vault_path = Self::get_vault_path(vault_file);
         
         if Path::new(vault_path).exists() {
             return Err(format!("Vault '{}' already exists! Remove it to reset.", vault_path).into());
-        }        let salt = SaltString::generate(&mut rand::thread_rng());
+        }
+
+        let salt = SaltString::generate(&mut rand::thread_rng());
         let key = derive_key(master_password.as_str(), &salt)?;
 
         let vault = Vault::new();
@@ -31,19 +135,33 @@ impl VaultManager {
 
         let (ciphertext, nonce) = encrypt_data(&key, &serialized)?;
 
-        // Save: [salt_len][salt][nonce][ciphertext]
-        let mut file = File::create(vault_path)?;
+        // Build vault file (v2 format with HMAC)
         let salt_bytes = salt.as_str().as_bytes();
-        file.write_all(&(salt_bytes.len() as u32).to_le_bytes())?; // 4 bytes for salt length
-        file.write_all(salt_bytes)?;
-        file.write_all(&nonce)?;
-        file.write_all(&ciphertext)?;
+        let header = VaultHeader::new(salt_bytes.len() as u32);
+        
+        // HMAC covers nonce + ciphertext
+        let mut hmac_data = Vec::new();
+        hmac_data.extend_from_slice(&nonce);
+        hmac_data.extend_from_slice(&ciphertext);
+        let hmac = Self::generate_hmac(&key, &hmac_data);
 
+        // Assemble file: [header(9)][salt][nonce(12)][hmac(32)][ciphertext]
+        let mut file_data = Vec::new();
+        file_data.extend_from_slice(&header.to_bytes());
+        file_data.extend_from_slice(salt_bytes);
+        file_data.extend_from_slice(&nonce);
+        file_data.extend_from_slice(&hmac);
+        file_data.extend_from_slice(&ciphertext);
+
+        Self::atomic_write(vault_path, &file_data)?;
+
+        log::info!("Vault initialized: {}", vault_path);
         Ok(())
     }    /// Load and decrypt vault with master password
     pub fn load(master_password: &Zeroizing<String>, vault_file: Option<&str>) -> Result<Vault, Box<dyn std::error::Error>> {
         let vault_path = Self::get_vault_path(vault_file);
-          if !Path::new(vault_path).exists() {
+        
+        if !Path::new(vault_path).exists() {
             return Err(format!("Vault '{}' not found! Run 'passman init' first.", vault_path).into());
         }
 
@@ -51,63 +169,154 @@ impl VaultManager {
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
 
-        // Parse file format: [salt_len][salt][nonce][ciphertext]
+        // Try v2 format first
+        if let Some(header) = VaultHeader::from_bytes(&buffer) {
+            // V2 format: [header(9)][salt][nonce(12)][hmac(32)][ciphertext]
+            let mut offset = 9;
+            
+            // Read salt
+            let salt_end = offset + header.salt_len as usize;
+            if buffer.len() < salt_end + 44 { // 12 (nonce) + 32 (hmac)
+                return Err("Vault file corrupted: too short".into());
+            }
+            let salt_str = std::str::from_utf8(&buffer[offset..salt_end])?;
+            let salt = SaltString::from_b64(salt_str)
+                .map_err(|e| format!("Salt parsing error: {}", e))?;
+            offset = salt_end;
+
+            // Read nonce
+            let nonce: [u8; 12] = buffer[offset..offset + 12].try_into()?;
+            offset += 12;
+
+            // Read HMAC
+            let stored_hmac = &buffer[offset..offset + 32];
+            offset += 32;
+
+            // Read ciphertext
+            let ciphertext = &buffer[offset..];
+
+            // Derive key
+            let key = derive_key(master_password.as_str(), &salt)?;
+
+            // Verify HMAC
+            let mut hmac_data = Vec::new();
+            hmac_data.extend_from_slice(&nonce);
+            hmac_data.extend_from_slice(ciphertext);
+            
+            if !Self::verify_hmac(&key, &hmac_data, stored_hmac) {
+                return Err("Vault integrity check failed. Wrong password or tampered file.".into());
+            }
+
+            // Decrypt
+            let plaintext = decrypt_data(&key, ciphertext, &nonce)?;
+            let vault: Vault = serde_json::from_slice(&plaintext)?;
+            
+            log::info!("Vault loaded (v2 format): {}", vault_path);
+            return Ok(vault);
+        }
+
+        // Legacy format: [salt_len(4)][salt][nonce(12)][ciphertext]
+        Self::load_legacy(master_password, vault_path, &buffer)
+    }
+
+    /// Load legacy format vault (backward compatibility)
+    fn load_legacy(
+        master_password: &Zeroizing<String>,
+        vault_path: &str,
+        buffer: &[u8],
+    ) -> Result<Vault, Box<dyn std::error::Error>> {
         let mut offset = 0;
         
         // Read salt length (4 bytes)
+        if buffer.len() < 4 {
+            return Err("Vault file too short".into());
+        }
         let salt_len = u32::from_le_bytes([
             buffer[offset], buffer[offset + 1], 
             buffer[offset + 2], buffer[offset + 3]
         ]) as usize;
-        offset += 4;        // Read salt
+        offset += 4;
+
+        if salt_len > 1000 || buffer.len() < offset + salt_len + 12 {
+            return Err("Invalid salt length in vault file".into());
+        }
+
+        // Read salt
         let salt_str = std::str::from_utf8(&buffer[offset..offset + salt_len])?;
-        let salt = SaltString::from_b64(salt_str).map_err(|e| format!("Salt parsing error: {}", e))?;
+        let salt = SaltString::from_b64(salt_str)
+            .map_err(|e| format!("Salt parsing error: {}", e))?;
         offset += salt_len;
 
         // Read nonce (12 bytes)
         let nonce: [u8; 12] = buffer[offset..offset + 12].try_into()?;
         offset += 12;
 
-        // Read ciphertext (rest of the file)
-        let ciphertext = &buffer[offset..];        // Derive key and decrypt
+        // Read ciphertext
+        let ciphertext = &buffer[offset..];
+
+        // Derive key and decrypt
         let key = derive_key(master_password.as_str(), &salt)?;
         let plaintext = decrypt_data(&key, ciphertext, &nonce)?;
         
         let vault: Vault = serde_json::from_slice(&plaintext)?;
+        
+        log::warn!("Loaded legacy vault format (v1): {}. Re-save to upgrade to v2.", vault_path);
         Ok(vault)
-    }    /// Save encrypted vault
+    }    /// Save encrypted vault (v2 format with HMAC and atomic write)
     pub fn save(vault: &Vault, master_password: &Zeroizing<String>, vault_file: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let vault_path = Self::get_vault_path(vault_file);
         
-        // Read existing salt from file
-        let mut file = File::open(vault_path)?;
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer)?;
+        // Read existing file to get salt
+        let salt = if Path::new(vault_path).exists() {
+            let mut file = File::open(vault_path)?;
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer)?;
 
-        let mut offset = 0;
-        
-        // Read salt length (4 bytes)
-        let salt_len = u32::from_le_bytes([
-            buffer[offset], buffer[offset + 1], 
-            buffer[offset + 2], buffer[offset + 3]
-        ]) as usize;
-        offset += 4;        // Read salt
-        let salt_str = std::str::from_utf8(&buffer[offset..offset + salt_len])?;
-        let salt = SaltString::from_b64(salt_str).map_err(|e| format!("Salt parsing error: {}", e))?;        // Derive key
+            // Try v2 format first
+            if let Some(header) = VaultHeader::from_bytes(&buffer) {
+                let salt_str = std::str::from_utf8(&buffer[9..9 + header.salt_len as usize])?;
+                SaltString::from_b64(salt_str)
+                    .map_err(|e| format!("Salt parsing error: {}", e))?
+            } else {
+                // Legacy format
+                let salt_len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
+                let salt_str = std::str::from_utf8(&buffer[4..4 + salt_len])?;
+                SaltString::from_b64(salt_str)
+                    .map_err(|e| format!("Salt parsing error: {}", e))?
+            }
+        } else {
+            SaltString::generate(&mut rand::thread_rng())
+        };
+
+        // Derive key
         let key = derive_key(master_password.as_str(), &salt)?;
 
         // Serialize and encrypt vault
         let serialized = serde_json::to_vec(vault)?;
         let (ciphertext, nonce) = encrypt_data(&key, &serialized)?;
 
-        // Write back to file
-        let mut file = File::create(vault_path)?;
+        // Build v2 format file
         let salt_bytes = salt.as_str().as_bytes();
-        file.write_all(&(salt_bytes.len() as u32).to_le_bytes())?;
-        file.write_all(salt_bytes)?;
-        file.write_all(&nonce)?;
-        file.write_all(&ciphertext)?;
+        let header = VaultHeader::new(salt_bytes.len() as u32);
+        
+        // Generate HMAC
+        let mut hmac_data = Vec::new();
+        hmac_data.extend_from_slice(&nonce);
+        hmac_data.extend_from_slice(&ciphertext);
+        let hmac = Self::generate_hmac(&key, &hmac_data);
 
+        // Assemble file
+        let mut file_data = Vec::new();
+        file_data.extend_from_slice(&header.to_bytes());
+        file_data.extend_from_slice(salt_bytes);
+        file_data.extend_from_slice(&nonce);
+        file_data.extend_from_slice(&hmac);
+        file_data.extend_from_slice(&ciphertext);
+
+        // Atomic write
+        Self::atomic_write(vault_path, &file_data)?;
+
+        log::info!("Vault saved: {}", vault_path);
         Ok(())
     }
 
@@ -134,9 +343,8 @@ impl VaultManager {
         
         vaults.sort();
         Ok(vaults)
-    }    /// Verify vault integrity using SHA-256 checksum
-    #[allow(dead_code)]
-    pub fn verify_integrity(vault_file: Option<&str>) -> Result<bool, Box<dyn std::error::Error>> {
+    }    /// Verify vault integrity using HMAC (requires password)
+    pub fn verify_integrity(master_password: &Zeroizing<String>, vault_file: Option<&str>) -> Result<bool, Box<dyn std::error::Error>> {
         let vault_path = Self::get_vault_path(vault_file);
         
         if !Path::new(vault_path).exists() {
@@ -147,14 +355,42 @@ impl VaultManager {
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
 
-        // Calculate current checksum
+        // Check for v2 format
+        if let Some(header) = VaultHeader::from_bytes(&buffer) {
+            let salt_str = std::str::from_utf8(&buffer[9..9 + header.salt_len as usize])?;
+            let salt = SaltString::from_b64(salt_str)
+                .map_err(|e| format!("Salt parsing error: {}", e))?;
+            
+            let key = derive_key(master_password.as_str(), &salt)?;
+            
+            let offset = 9 + header.salt_len as usize;
+            let nonce = &buffer[offset..offset + 12];
+            let stored_hmac = &buffer[offset + 12..offset + 44];
+            let ciphertext = &buffer[offset + 44..];
+            
+            let mut hmac_data = Vec::new();
+            hmac_data.extend_from_slice(nonce);
+            hmac_data.extend_from_slice(ciphertext);
+            
+            let valid = Self::verify_hmac(&key, &hmac_data, stored_hmac);
+            
+            if valid {
+                log::info!("Vault integrity verified (HMAC): {}", vault_path);
+            } else {
+                log::error!("Vault integrity check FAILED: {}", vault_path);
+            }
+            
+            return Ok(valid);
+        }
+
+        // Legacy format - no HMAC verification available
+        log::warn!("Legacy vault format does not support HMAC integrity verification");
+        
+        // Fall back to SHA-256 checksum logging
         let mut hasher = Sha256::new();
         hasher.update(&buffer);
         let current_hash = hasher.finalize();
-
-        // For now, we'll implement basic integrity check
-        // In production, you'd store and compare against a known good hash
-        log::info!("Vault integrity check: SHA-256 = {:x}", current_hash);
+        log::info!("Vault SHA-256: {:x}", current_hash);
         
         Ok(true)
     }
@@ -170,10 +406,65 @@ impl VaultManager {
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
         let backup_name = format!("{}.backup.{}", vault_path, timestamp);
         
-        std::fs::copy(vault_path, &backup_name)?;
+        fs::copy(vault_path, &backup_name)?;
         log::info!("Vault backup created: {}", backup_name);
         
         Ok(backup_name)
+    }
+
+    /// Change master password (re-encrypts the vault with new password)
+    pub fn change_password(
+        old_password: &Zeroizing<String>,
+        new_password: &Zeroizing<String>,
+        vault_file: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let vault_path = Self::get_vault_path(vault_file);
+        
+        // Create backup first
+        let backup = Self::create_backup(vault_file)?;
+        log::info!("Created backup before password change: {}", backup);
+
+        // Load vault with old password
+        let vault = Self::load(old_password, vault_file)?;
+
+        // Generate new salt for new password
+        let new_salt = SaltString::generate(&mut rand::thread_rng());
+        let new_key = derive_key(new_password.as_str(), &new_salt)?;
+
+        // Re-encrypt vault
+        let serialized = serde_json::to_vec(&vault)?;
+        let (ciphertext, nonce) = encrypt_data(&new_key, &serialized)?;
+
+        // Build new vault file (v2 format)
+        let salt_bytes = new_salt.as_str().as_bytes();
+        let header = VaultHeader::new(salt_bytes.len() as u32);
+        
+        let mut hmac_data = Vec::new();
+        hmac_data.extend_from_slice(&nonce);
+        hmac_data.extend_from_slice(&ciphertext);
+        let hmac = Self::generate_hmac(&new_key, &hmac_data);
+
+        let mut file_data = Vec::new();
+        file_data.extend_from_slice(&header.to_bytes());
+        file_data.extend_from_slice(salt_bytes);
+        file_data.extend_from_slice(&nonce);
+        file_data.extend_from_slice(&hmac);
+        file_data.extend_from_slice(&ciphertext);
+
+        Self::atomic_write(vault_path, &file_data)?;
+
+        log::info!("Master password changed successfully: {}", vault_path);
+        Ok(())
+    }
+
+    /// Delete a vault file
+    pub fn delete(vault_file: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+        let vault_path = Self::get_vault_path(vault_file);
+        if Path::new(vault_path).exists() {
+            fs::remove_file(vault_path)?;
+            log::info!("Vault deleted: {}", vault_path);
+        }
+        Ok(())
     }
 }
 
@@ -219,6 +510,16 @@ impl SecurityManager {
         }
     }
 
+    /// Get remaining lockout seconds (convenience method)
+    pub fn lockout_remaining_secs(&self) -> u64 {
+        self.remaining_lockout_time().unwrap_or(0)
+    }
+
+    /// Get remaining login attempts before lockout
+    pub fn remaining_attempts(&self) -> u32 {
+        5u32.saturating_sub(self.failed_attempts)
+    }
+
     /// Record a failed authentication attempt
     #[allow(dead_code)]
     pub fn record_failed_attempt(&mut self) {
@@ -249,6 +550,11 @@ impl SecurityManager {
         self.failed_attempts = 0;
         self.last_attempt = None;
         self.lockout_until = None;
+    }
+
+    /// Alias for record_successful_attempt (for API consistency)
+    pub fn record_successful_login(&mut self) {
+        self.record_successful_attempt();
     }
 
     /// Clear all security state (for testing purposes)

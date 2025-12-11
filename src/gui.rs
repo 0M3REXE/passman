@@ -1,10 +1,13 @@
 use eframe::egui;
 use crate::model::{Entry, Vault};
-use crate::vault::VaultManager;
+use crate::vault::{VaultManager, SecurityManager};
 use crate::utils::*;
 use crate::health::{PasswordHealthAnalyzer, HealthSummary};
 use crate::import_export::ImportExportManager;
+use crate::secure_clipboard::SecureClipboard;
+use crate::config::{Config, get_config};
 use std::collections::HashMap;
+use std::time::Instant;
 use zeroize::Zeroizing;
 
 // Simple UI Constants
@@ -20,6 +23,13 @@ pub struct PassmanApp {
     vault: Option<Vault>,
     vault_file: String,
     master_password: Zeroizing<String>,
+    
+    // Security state
+    security_manager: SecurityManager,
+    secure_clipboard: SecureClipboard,
+    last_activity: Option<Instant>,
+    lock_timeout_secs: u64,
+    clipboard_clear_secs: u64,
     
     // UI state
     show_password: HashMap<String, bool>,
@@ -60,6 +70,12 @@ pub struct PassmanApp {
     export_format: ExportFormat,
     import_format: ImportFormat,
     merge_on_import: bool,
+    
+    // Password change fields
+    change_current_password: Zeroizing<String>,
+    change_new_password: Zeroizing<String>,
+    change_confirm_password: Zeroizing<String>,
+    show_password_change: bool,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -151,9 +167,14 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         
         // Apply the initial style (which includes visuals, spacing, etc.)
         // cc.egui_ctx.set_visuals(style.visuals.clone()); // Redundant if set_style is called with the same style object
-        cc.egui_ctx.set_style(style);        Self {
-            vault_file: "vault.dat".to_string(),
-            password_length: 16,
+        cc.egui_ctx.set_style(style);
+        
+        // Load configuration
+        let config = get_config();
+
+        Self {
+            vault_file: config.general.default_vault.clone(),
+            password_length: config.password.default_length,
             master_password: Zeroizing::new(String::new()),
             init_password: Zeroizing::new(String::new()),
             init_confirm: Zeroizing::new(String::new()),
@@ -163,6 +184,12 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
             export_format: ExportFormat::Json,
             import_format: ImportFormat::Json,
             merge_on_import: false,
+            // Security settings from config
+            lock_timeout_secs: config.security.lock_timeout_secs,
+            clipboard_clear_secs: config.security.clipboard_timeout_secs,
+            secure_clipboard: SecureClipboard::with_timeout(config.security.clipboard_timeout_secs),
+            security_manager: SecurityManager::new(),
+            last_activity: None,
             ..Default::default()
         }
     }
@@ -175,6 +202,19 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
     fn clear_message(&mut self) {
         self.message.clear();
         self.message_type = MessageType::None;
+    }
+
+    /// Lock the vault and clear sensitive data
+    fn lock_vault(&mut self) {
+        self.vault = None;
+        *self.master_password = String::new();
+        self.entries.clear();
+        self.show_password.clear();
+        self.last_activity = None;
+        self.current_screen = Screen::Welcome;
+        
+        // Clear clipboard for security
+        let _ = self.secure_clipboard.clear_now();
     }
 
     fn load_entries(&mut self) {
@@ -222,16 +262,39 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
 
         Ok(())
     }    fn login(&mut self) -> Result<(), String> {
-        let vault = VaultManager::load(&self.login_password, Some(&self.vault_file))
-            .map_err(|e| e.to_string())?;
+        // Check if locked out
+        if self.security_manager.is_locked_out() {
+            let remaining = self.security_manager.lockout_remaining_secs();
+            return Err(format!("Account locked. Please wait {} seconds.", remaining));
+        }
 
-        *self.master_password = self.login_password.to_string();
-        self.vault = Some(vault);
-        self.load_entries();
-        self.current_screen = Screen::Main;
-        *self.login_password = String::new();
-
-        Ok(())
+        match VaultManager::load(&self.login_password, Some(&self.vault_file)) {
+            Ok(vault) => {
+                // Successful login
+                self.security_manager.record_successful_login();
+                *self.master_password = self.login_password.to_string();
+                self.vault = Some(vault);
+                self.load_entries();
+                self.current_screen = Screen::Main;
+                *self.login_password = String::new();
+                // Start session timer
+                self.last_activity = Some(Instant::now());
+                Ok(())
+            }
+            Err(e) => {
+                // Failed login - record attempt
+                self.security_manager.record_failed_attempt();
+                *self.login_password = String::new();
+                
+                if self.security_manager.is_locked_out() {
+                    let remaining = self.security_manager.lockout_remaining_secs();
+                    Err(format!("Too many failed attempts. Locked for {} seconds.", remaining))
+                } else {
+                    let remaining_attempts = self.security_manager.remaining_attempts();
+                    Err(format!("{} ({} attempts remaining)", e, remaining_attempts))
+                }
+            }
+        }
     }    fn add_entry(&mut self) -> Result<(), String> {
         if let Some(vault) = &mut self.vault {
             // Validation: check for empty required fields
@@ -374,7 +437,24 @@ impl PassmanApp {    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
 
 impl eframe::App for PassmanApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Visuals are set in `PassmanApp::new`
+        // Check for session timeout (only when vault is unlocked)
+        if self.vault.is_some() && self.lock_timeout_secs > 0 {
+            if let Some(last) = self.last_activity {
+                if last.elapsed().as_secs() >= self.lock_timeout_secs {
+                    // Session timed out - lock the vault
+                    self.lock_vault();
+                    self.show_message(
+                        format!("Session timed out after {} seconds of inactivity", self.lock_timeout_secs),
+                        MessageType::Info
+                    );
+                }
+            }
+        }
+        
+        // Update last activity on any input
+        if ctx.input(|i| i.pointer.any_click() || i.key_pressed(egui::Key::Enter) || !i.keys_down.is_empty()) {
+            self.last_activity = Some(Instant::now());
+        }
         
         egui::CentralPanel::default()
             .frame(egui::Frame::none()
@@ -630,8 +710,24 @@ impl PassmanApp {
                                     }                                }
                                 
                                 if self.primary_button(ui, "Copy", [60.0, 30.0]).clicked() {
-                                    ctx.output_mut(|o| o.copied_text = entry.password.clone());
-                                    self.show_message(format!("Password for \'{}\' copied to clipboard!", id), MessageType::Info);
+                                    // Use secure clipboard with auto-clear
+                                    match self.secure_clipboard.copy_password(&entry.password) {
+                                        Ok(()) => {
+                                            let timeout = self.clipboard_clear_secs;
+                                            self.show_message(
+                                                format!("Password copied! Clipboard will clear in {}s", timeout), 
+                                                MessageType::Info
+                                            );
+                                        }
+                                        Err(_) => {
+                                            // Fallback to egui clipboard
+                                            ctx.output_mut(|o| o.copied_text = entry.password.clone());
+                                            self.show_message(
+                                                format!("Password for '{}' copied (secure clipboard unavailable)", id), 
+                                                MessageType::Info
+                                            );
+                                        }
+                                    }
                                 }
                                 
                                 if self.success_button(ui, "Edit", [60.0, 30.0]).clicked() {
@@ -884,6 +980,100 @@ impl PassmanApp {
                     ui.label("Could not read vault files.");
                 }
             });
+            ui.add_space(SPACING * 2.0);
+            
+            // Password Change Section
+            ui.separator();
+            ui.add_space(SPACING);
+            
+            if self.vault.is_some() {
+                ui.collapsing("🔐 Change Master Password", |ui| {
+                    ui.add_space(SPACING);
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Current Password:");
+                        ui.add(egui::TextEdit::singleline(&mut *self.change_current_password)
+                            .password(true)
+                            .desired_width(INPUT_WIDTH - 100.0));
+                    });
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("New Password:");
+                        ui.add(egui::TextEdit::singleline(&mut *self.change_new_password)
+                            .password(!self.show_password_change)
+                            .desired_width(INPUT_WIDTH - 100.0));
+                    });
+                    
+                    // Show password strength for new password
+                    if !self.change_new_password.is_empty() {
+                        let (strength, suggestions) = analyze_password_strength(&self.change_new_password);
+                        ui.horizontal(|ui| {
+                            ui.label("Strength:");
+                            let color = match &strength {
+                                PasswordStrength::VeryWeak | PasswordStrength::Weak => egui::Color32::RED,
+                                PasswordStrength::Fair => egui::Color32::YELLOW,
+                                PasswordStrength::Good => egui::Color32::LIGHT_GREEN,
+                                PasswordStrength::Strong => egui::Color32::GREEN,
+                            };
+                            ui.colored_label(color, strength.to_string());
+                        });
+                        if !suggestions.is_empty() {
+                            for suggestion in &suggestions {
+                                ui.small(format!("• {}", suggestion));
+                            }
+                        }
+                    }
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Confirm Password:");
+                        ui.add(egui::TextEdit::singleline(&mut *self.change_confirm_password)
+                            .password(!self.show_password_change)
+                            .desired_width(INPUT_WIDTH - 100.0));
+                    });
+                    
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.show_password_change, "Show passwords");
+                    });
+                    
+                    ui.add_space(SPACING);
+                    
+                    if self.primary_button(ui, "Change Password", [150.0, BUTTON_HEIGHT]).clicked() {
+                        // Validate inputs
+                        if self.change_current_password.is_empty() {
+                            self.show_message("Current password is required".into(), MessageType::Error);
+                        } else if self.change_new_password.is_empty() {
+                            self.show_message("New password is required".into(), MessageType::Error);
+                        } else if self.change_new_password.len() < 8 {
+                            self.show_message("New password must be at least 8 characters".into(), MessageType::Error);
+                        } else if self.change_new_password.as_str() != self.change_confirm_password.as_str() {
+                            self.show_message("New passwords do not match".into(), MessageType::Error);
+                        } else if self.change_current_password.as_str() != self.master_password.as_str() {
+                            self.show_message("Current password is incorrect".into(), MessageType::Error);
+                        } else {
+                            // Attempt to change password
+                            match VaultManager::change_password(
+                                &self.change_current_password,
+                                &self.change_new_password,
+                                Some(&self.vault_file)
+                            ) {
+                                Ok(()) => {
+                                    *self.master_password = self.change_new_password.to_string();
+                                    *self.change_current_password = String::new();
+                                    *self.change_new_password = String::new();
+                                    *self.change_confirm_password = String::new();
+                                    self.show_message("Master password changed successfully!".into(), MessageType::Success);
+                                }
+                                Err(e) => {
+                                    self.show_message(format!("Failed to change password: {}", e), MessageType::Error);
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                ui.label("Unlock a vault to change the master password.");
+            }
+            
             ui.add_space(SPACING * 2.0);
             
             if self.secondary_button(ui, "Back", [150.0, BUTTON_HEIGHT]).clicked() { // Adjusted width
