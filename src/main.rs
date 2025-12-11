@@ -67,6 +67,9 @@ fn run_cli() {
         },
         Commands::Transfer(transfer_cmd) => handle_transfer(transfer_cmd, vault_file),
         Commands::Config(config_cmd) => handle_config(config_cmd),
+        Commands::Backup { output } => handle_backup(vault_file, output.as_deref()),
+        Commands::Health { verbose, issues_only } => handle_health(vault_file, verbose, issues_only),
+        Commands::ChangePassword => handle_change_password(vault_file),
     };
 
     if let Err(e) = result {
@@ -687,6 +690,173 @@ fn format_duration(secs: u64) -> String {
     } else {
         format!("{} hours", secs / 3600)
     }
+}
+
+fn handle_backup(vault_file: Option<&str>, output: Option<&str>) -> Result<(), Box<dyn Error>> {
+    // Verify vault exists and password is correct
+    let master_password = read_password_secure("Enter master password: ")?;
+    let _ = VaultManager::load(&master_password, vault_file)?;
+    
+    // Create backup - if custom output provided, copy to that path
+    let backup_path = if let Some(custom_path) = output {
+        // Use custom path
+        let vault_path = vault_file.unwrap_or("vault.dat");
+        std::fs::copy(vault_path, custom_path)?;
+        custom_path.to_string()
+    } else {
+        // Use default timestamped backup
+        VaultManager::create_backup(vault_file)?
+    };
+    
+    println!("✓ Backup created: {}", backup_path);
+    Ok(())
+}
+
+fn handle_health(vault_file: Option<&str>, verbose: bool, issues_only: bool) -> Result<(), Box<dyn Error>> {
+    use health::{PasswordHealthAnalyzer, PasswordHealth};
+    
+    let master_password = read_password_secure("Enter master password: ")?;
+    let vault = VaultManager::load(&master_password, vault_file)?;
+    
+    if vault.is_empty() {
+        println!("No entries in vault to analyze.");
+        return Ok(());
+    }
+    
+    let analyzer = PasswordHealthAnalyzer::new();
+    let reports = analyzer.analyze_vault(&vault);
+    let summary = analyzer.generate_summary(&reports);
+    
+    // Print header
+    println!("\n🔐 Password Health Report");
+    println!("{}", "=".repeat(60));
+    
+    // Print summary
+    println!("\n📊 Summary:");
+    println!("   Total entries: {}", summary.total);
+    println!("   Health score:  {}/100", summary.score);
+    println!();
+    println!("   🔴 Critical: {}", summary.critical);
+    println!("   🟠 Warning:  {}", summary.warning);
+    println!("   🟢 Good:     {}", summary.good);
+    println!("   ✨ Excellent: {}", summary.excellent);
+    
+    // Print detailed reports
+    println!("\n{}", "-".repeat(60));
+    println!("📋 Entry Details:\n");
+    
+    for report in &reports {
+        // Skip if only showing issues and this entry is fine
+        if issues_only {
+            match &report.health {
+                PasswordHealth::Excellent | PasswordHealth::Good => continue,
+                _ => {}
+            }
+        }
+        
+        let icon = match &report.health {
+            PasswordHealth::Critical { .. } => "🔴",
+            PasswordHealth::Warning { .. } => "🟠",
+            PasswordHealth::Good => "🟢",
+            PasswordHealth::Excellent => "✨",
+        };
+        
+        let status = match &report.health {
+            PasswordHealth::Critical { .. } => "CRITICAL",
+            PasswordHealth::Warning { .. } => "WARNING",
+            PasswordHealth::Good => "GOOD",
+            PasswordHealth::Excellent => "EXCELLENT",
+        };
+        
+        println!("{} {} - {} ({:?})", icon, report.entry_id, status, report.strength);
+        
+        if verbose {
+            println!("   Age: {} days", report.age_days);
+            
+            // Show issues
+            if let PasswordHealth::Critical { issues } | PasswordHealth::Warning { issues } = &report.health {
+                for issue in issues {
+                    println!("   ⚠ {}", issue);
+                }
+            }
+            
+            // Show recommendations
+            if !report.recommendations.is_empty() {
+                for rec in &report.recommendations {
+                    println!("   → {}", rec);
+                }
+            }
+            println!();
+        }
+    }
+    
+    // Print action items
+    if summary.critical > 0 || summary.warning > 0 {
+        println!("{}", "-".repeat(60));
+        println!("⚡ Action Required:");
+        if summary.critical > 0 {
+            println!("   • {} password(s) need immediate attention", summary.critical);
+        }
+        if summary.warning > 0 {
+            println!("   • {} password(s) should be reviewed", summary.warning);
+        }
+    }
+    
+    Ok(())
+}
+
+fn handle_change_password(vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+    println!("🔐 Change Master Password");
+    println!("{}", "-".repeat(40));
+    
+    // Verify current password
+    let current_password = read_password_secure("Enter current master password: ")?;
+    
+    // Load vault to verify password
+    let _ = VaultManager::load(&current_password, vault_file)?;
+    println!("✓ Current password verified");
+    
+    // Get new password
+    let new_password = read_password_secure("Enter new master password: ")?;
+    let confirm_password = read_password_secure("Confirm new master password: ")?;
+    
+    if new_password.as_str() != confirm_password.as_str() {
+        return Err("New passwords do not match!".into());
+    }
+    
+    if new_password.len() < 8 {
+        return Err("New password must be at least 8 characters long!".into());
+    }
+    
+    // Check password strength
+    let (strength, suggestions) = analyze_password_strength(&new_password);
+    println!("\nNew password strength: {:?}", strength);
+    
+    if !suggestions.is_empty() {
+        println!("Suggestions for improvement:");
+        for suggestion in &suggestions {
+            println!("  • {}", suggestion);
+        }
+        
+        let proceed = read_line_optional("\nProceed anyway? (y/N): ")?;
+        if proceed.to_lowercase() != "y" && proceed.to_lowercase() != "yes" {
+            println!("Password change cancelled.");
+            return Ok(());
+        }
+    }
+    
+    // Create backup before changing
+    println!("\nCreating backup before password change...");
+    let backup_path = VaultManager::create_backup(vault_file)?;
+    println!("✓ Backup created: {}", backup_path);
+    
+    // Change the password
+    VaultManager::change_password(&current_password, &new_password, vault_file)?;
+    
+    println!("\n✓ Master password changed successfully!");
+    println!("⚠ Make sure to remember your new password - it cannot be recovered!");
+    
+    Ok(())
 }
 
 

@@ -122,6 +122,26 @@ pub enum Commands {
     /// Configuration management
     #[command(subcommand)]
     Config(ConfigCommands),
+    
+    /// Create vault backup
+    Backup {
+        /// Output file path (default: vault_backup_<timestamp>.dat)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    
+    /// Analyze password health across vault
+    Health {
+        /// Show detailed report
+        #[arg(short, long)]
+        verbose: bool,
+        /// Only show entries with issues
+        #[arg(short, long)]
+        issues_only: bool,
+    },
+    
+    /// Change master password
+    ChangePassword,
 }
 
 #[derive(Subcommand)]

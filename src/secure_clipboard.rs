@@ -2,6 +2,9 @@
 //! 
 //! Provides clipboard operations with automatic clearing after a timeout
 //! to prevent password leakage through clipboard history.
+//! 
+//! On Windows, this module also excludes sensitive content from clipboard history
+//! and clears it from history when clearing the clipboard.
 
 use clipboard::{ClipboardProvider, ClipboardContext};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
@@ -10,6 +13,48 @@ use std::time::Duration;
 
 /// Default clipboard clear timeout in seconds
 const DEFAULT_CLEAR_TIMEOUT_SECS: u64 = 30;
+
+/// Windows clipboard format for excluding from history
+/// CLIPBOARD_FORMAT_EXCLUDE_FROM_HISTORY = "ExcludeClipboardContentFromMonitorProcessing"
+#[cfg(target_os = "windows")]
+const CF_EXCLUDE_FROM_HISTORY_NAME: &str = "ExcludeClipboardContentFromMonitorProcessing";
+
+/// Windows clipboard format for marking as confidential
+/// This tells Windows not to sync or store this content
+#[cfg(target_os = "windows")]
+const CF_CAN_INCLUDE_IN_HISTORY_NAME: &str = "CanIncludeInClipboardHistory";
+
+#[cfg(target_os = "windows")]
+mod win32 {
+    use std::ffi::CString;
+    
+    #[link(name = "user32")]
+    extern "system" {
+        pub fn OpenClipboard(hWndNewOwner: *mut std::ffi::c_void) -> i32;
+        pub fn CloseClipboard() -> i32;
+        pub fn EmptyClipboard() -> i32;
+        pub fn SetClipboardData(uFormat: u32, hMem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+        pub fn RegisterClipboardFormatA(lpszFormat: *const i8) -> u32;
+        pub fn GetClipboardData(uFormat: u32) -> *mut std::ffi::c_void;
+    }
+    
+    #[link(name = "kernel32")]
+    extern "system" {
+        pub fn GlobalAlloc(uFlags: u32, dwBytes: usize) -> *mut std::ffi::c_void;
+        pub fn GlobalLock(hMem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+        pub fn GlobalUnlock(hMem: *mut std::ffi::c_void) -> i32;
+        pub fn GlobalFree(hMem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    }
+    
+    pub const GMEM_MOVEABLE: u32 = 0x0002;
+    pub const CF_UNICODETEXT: u32 = 13;
+    
+    /// Register a custom clipboard format
+    pub fn register_clipboard_format(name: &str) -> u32 {
+        let c_name = CString::new(name).unwrap();
+        unsafe { RegisterClipboardFormatA(c_name.as_ptr()) }
+    }
+}
 
 /// Result type for clipboard operations
 pub type ClipboardResult<T> = Result<T, ClipboardError>;
@@ -110,12 +155,21 @@ impl SecureClipboard {
         // Create a unique identifier for this content
         let content_id = format!("passman_{}", uuid::Uuid::new_v4());
         
-        // Set the clipboard content
-        let mut ctx: ClipboardContext = ClipboardProvider::new()
-            .map_err(|e| ClipboardError::AccessError(e.to_string()))?;
+        // On Windows, use native API to exclude from clipboard history
+        #[cfg(target_os = "windows")]
+        {
+            self.copy_windows_secure(text)?;
+        }
         
-        ctx.set_contents(text.to_owned())
-            .map_err(|e| ClipboardError::SetError(e.to_string()))?;
+        // On non-Windows, use the standard clipboard crate
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut ctx: ClipboardContext = ClipboardProvider::new()
+                .map_err(|e| ClipboardError::AccessError(e.to_string()))?;
+            
+            ctx.set_contents(text.to_owned())
+                .map_err(|e| ClipboardError::SetError(e.to_string()))?;
+        }
 
         // Store the content ID
         if let Ok(mut id) = self.content_id.lock() {
@@ -127,6 +181,89 @@ impl SecureClipboard {
             self.schedule_clear(content_id);
         }
 
+        Ok(())
+    }
+    
+    /// Windows-specific clipboard copy that excludes content from history
+    #[cfg(target_os = "windows")]
+    fn copy_windows_secure(&self, text: &str) -> ClipboardResult<()> {
+        use std::ptr::null_mut;
+        
+        unsafe {
+            // Open clipboard
+            if win32::OpenClipboard(null_mut()) == 0 {
+                return Err(ClipboardError::AccessError("Failed to open clipboard".to_string()));
+            }
+            
+            // Empty clipboard first
+            if win32::EmptyClipboard() == 0 {
+                win32::CloseClipboard();
+                return Err(ClipboardError::ClearError("Failed to empty clipboard".to_string()));
+            }
+            
+            // Convert text to UTF-16 for Windows
+            let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+            let size = wide.len() * 2;
+            
+            // Allocate global memory for the text
+            let hmem = win32::GlobalAlloc(win32::GMEM_MOVEABLE, size);
+            if hmem.is_null() {
+                win32::CloseClipboard();
+                return Err(ClipboardError::SetError("Failed to allocate memory".to_string()));
+            }
+            
+            // Lock and copy
+            let ptr = win32::GlobalLock(hmem);
+            if ptr.is_null() {
+                win32::GlobalFree(hmem);
+                win32::CloseClipboard();
+                return Err(ClipboardError::SetError("Failed to lock memory".to_string()));
+            }
+            
+            std::ptr::copy_nonoverlapping(wide.as_ptr(), ptr as *mut u16, wide.len());
+            win32::GlobalUnlock(hmem);
+            
+            // Set the text data
+            if win32::SetClipboardData(win32::CF_UNICODETEXT, hmem).is_null() {
+                win32::GlobalFree(hmem);
+                win32::CloseClipboard();
+                return Err(ClipboardError::SetError("Failed to set clipboard data".to_string()));
+            }
+            
+            // Set the "ExcludeClipboardContentFromMonitorProcessing" format
+            // This tells Windows not to add this to clipboard history
+            let exclude_format = win32::register_clipboard_format(CF_EXCLUDE_FROM_HISTORY_NAME);
+            if exclude_format != 0 {
+                // Allocate a small buffer with value 1 to indicate exclusion
+                let hmem_exclude = win32::GlobalAlloc(win32::GMEM_MOVEABLE, 4);
+                if !hmem_exclude.is_null() {
+                    let ptr_exclude = win32::GlobalLock(hmem_exclude);
+                    if !ptr_exclude.is_null() {
+                        *(ptr_exclude as *mut u32) = 1;
+                        win32::GlobalUnlock(hmem_exclude);
+                        win32::SetClipboardData(exclude_format, hmem_exclude);
+                    }
+                }
+            }
+            
+            // Also set "CanIncludeInClipboardHistory" to 0 (false)
+            let can_include_format = win32::register_clipboard_format(CF_CAN_INCLUDE_IN_HISTORY_NAME);
+            if can_include_format != 0 {
+                let hmem_history = win32::GlobalAlloc(win32::GMEM_MOVEABLE, 4);
+                if !hmem_history.is_null() {
+                    let ptr_history = win32::GlobalLock(hmem_history);
+                    if !ptr_history.is_null() {
+                        *(ptr_history as *mut u32) = 0; // 0 = don't include in history
+                        win32::GlobalUnlock(hmem_history);
+                        win32::SetClipboardData(can_include_format, hmem_history);
+                    }
+                }
+            }
+            
+            win32::CloseClipboard();
+        }
+        
+        log::debug!("Password copied to clipboard (excluded from history)");
         Ok(())
     }
 
