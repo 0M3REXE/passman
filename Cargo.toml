@@ -10,6 +10,12 @@ readme = "README.md"
 keywords = ["password", "security", "encryption", "manager"]
 categories = ["command-line-utilities", "cryptography"]
 
+[package.metadata.wix]
+upgrade-guid = "9E4B9030-2221-4AC0-A9AC-50B312775F10"
+path-guid = "3F5A02D2-7636-4884-B563-C3FA39504206"
+license = false
+eula = false
+
 [dependencies]
 atty = "0.2"
 aes = "0.8"
@@ -64,3 +70,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
