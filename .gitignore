@@ -11,7 +11,7 @@ src/improvements.md
 *~
 build.rs
 app-icon.rc
-src/config.rs
+
 src/two_factor.rs
 # OS generated files
 .DS_Store
