@@ -136,11 +136,9 @@ jobs:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
-      - name: Install Linux GUI Dependencies
-        if: runner.os == 'Linux'
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libssl-dev
+          ${{ matrix.packages_install }}
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
