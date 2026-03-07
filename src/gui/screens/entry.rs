@@ -22,20 +22,18 @@ impl PassmanApp {
         egui::Frame::none()
             .fill(theme::header_bg_color(&current_theme))
             .inner_margin(egui::Margin::symmetric(20.0, 14.0))
-            .rounding(egui::Rounding::same(14.0))
+            .rounding(egui::Rounding::ZERO)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("➕").size(22.0));
-                    ui.add_space(10.0);
                     ui.label(egui::RichText::new("Add New Entry").size(20.0).strong());
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let back_btn = egui::Button::new(
-                            egui::RichText::new("← Back").size(13.0)
+                            egui::RichText::new("< Back").size(13.0)
                         )
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(10.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .min_size(egui::vec2(80.0, 34.0));
                         
                         if ui.add(back_btn).clicked() {
@@ -54,10 +52,11 @@ impl PassmanApp {
                 egui::Frame::none()
                     .fill(frame_fill)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(egui::Rounding::same(16.0))
+                    .rounding(egui::Rounding::same(2.0))
                     .inner_margin(egui::Margin::same(28.0))
                     .show(ui, |ui| {
                         ui.set_width(400.0);
+                        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                         let field_width = 370.0;
                         let field_height = 38.0;
                         
@@ -120,11 +119,11 @@ impl PassmanApp {
                                     self.clear_form_error("add_password");
                                 }
                                 
-                                let eye_text = if self.add_show_password { "🙈" } else { "👁" };
+                                let eye_text = if self.add_show_password { "Hide" } else { "Show" };
                                 let eye_btn = egui::Button::new(
-                                    egui::RichText::new(eye_text).size(16.0)
+                                    egui::RichText::new(eye_text).size(12.0)
                                 )
-                                .rounding(egui::Rounding::same(8.0))
+                                .rounding(egui::Rounding::same(2.0))
                                 .min_size(egui::vec2(eye_width, field_height));
                                 
                                 if ui.add(eye_btn).clicked() {
@@ -159,12 +158,12 @@ impl PassmanApp {
                         // Submit button
                         ui.vertical_centered(|ui| {
                             let submit_btn = egui::Button::new(
-                                egui::RichText::new("✓ Add Entry")
+                                egui::RichText::new("Add Entry")
                                     .size(15.0)
                                     .color(egui::Color32::WHITE)
                             )
                             .fill(egui::Color32::from_rgb(34, 197, 94))
-                            .rounding(egui::Rounding::same(10.0))
+                            .rounding(egui::Rounding::same(2.0))
                             .min_size(egui::vec2(200.0, 44.0));
                             
                             if ui.add(submit_btn).clicked() && self.validate_add_entry() {
@@ -179,6 +178,7 @@ impl PassmanApp {
                                 }
                             }
                         });
+                        }); // end with_layout
                     });
                 
                 ui.add_space(24.0);
@@ -199,20 +199,18 @@ impl PassmanApp {
         egui::Frame::none()
             .fill(theme::header_bg_color(&current_theme))
             .inner_margin(egui::Margin::symmetric(20.0, 14.0))
-            .rounding(egui::Rounding::same(14.0))
+            .rounding(egui::Rounding::ZERO)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("✏").size(22.0));
-                    ui.add_space(10.0);
                     ui.label(egui::RichText::new(format!("Edit: {}", id)).size(20.0).strong());
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let back_btn = egui::Button::new(
-                            egui::RichText::new("← Back").size(13.0)
+                            egui::RichText::new("< Back").size(13.0)
                         )
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(10.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .min_size(egui::vec2(80.0, 34.0));
                         
                         if ui.add(back_btn).clicked() {
@@ -232,10 +230,11 @@ impl PassmanApp {
                 egui::Frame::none()
                     .fill(frame_fill)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(egui::Rounding::same(16.0))
+                    .rounding(egui::Rounding::same(2.0))
                     .inner_margin(egui::Margin::same(28.0))
                     .show(ui, |ui| {
                         ui.set_width(400.0);
+                        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                         let field_width = 370.0;
                         let field_height = 38.0;
                         
@@ -283,11 +282,11 @@ impl PassmanApp {
                                     self.clear_form_error("edit_password");
                                 }
                                 
-                                let eye_text = if self.edit_show_password { "🙈" } else { "👁" };
+                                let eye_text = if self.edit_show_password { "Hide" } else { "Show" };
                                 let eye_btn = egui::Button::new(
-                                    egui::RichText::new(eye_text).size(16.0)
+                                    egui::RichText::new(eye_text).size(12.0)
                                 )
-                                .rounding(egui::Rounding::same(8.0))
+                                .rounding(egui::Rounding::same(2.0))
                                 .min_size(egui::vec2(eye_width, field_height));
                                 
                                 if ui.add(eye_btn).clicked() {
@@ -322,12 +321,12 @@ impl PassmanApp {
                         // Submit button
                         ui.vertical_centered(|ui| {
                             let submit_btn = egui::Button::new(
-                                egui::RichText::new("✓ Update Entry")
+                                egui::RichText::new("Update Entry")
                                     .size(15.0)
                                     .color(egui::Color32::WHITE)
                             )
                             .fill(egui::Color32::from_rgb(34, 197, 94))
-                            .rounding(egui::Rounding::same(10.0))
+                            .rounding(egui::Rounding::same(2.0))
                             .min_size(egui::vec2(200.0, 44.0));
                             
                             if ui.add(submit_btn).clicked() && self.validate_edit_entry() {
@@ -342,6 +341,7 @@ impl PassmanApp {
                                 }
                             }
                         });
+                        }); // end with_layout
                     });
                 
                 ui.add_space(24.0);

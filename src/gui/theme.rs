@@ -63,28 +63,28 @@ pub fn apply_theme(_theme: &Theme, ctx: &egui::Context) {
     // ── Non-interactive widgets ────────────────────────────────────────
     style.visuals.widgets.noninteractive.bg_fill = BG_WIDGET;
     style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, BORDER_SUBTLE);
-    style.visuals.widgets.noninteractive.rounding = egui::Rounding::same(8.0);
+    style.visuals.widgets.noninteractive.rounding = egui::Rounding::same(2.0);
     style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, TEXT_MUTED);
     style.visuals.widgets.noninteractive.expansion = 0.0;
     
     // ── Inactive (idle interactive widgets) ────────────────────────────
     style.visuals.widgets.inactive.bg_fill = BG_WIDGET;
     style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, BORDER_MEDIUM);
-    style.visuals.widgets.inactive.rounding = egui::Rounding::same(8.0);
+    style.visuals.widgets.inactive.rounding = egui::Rounding::same(2.0);
     style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, TEXT_PRIMARY);
     style.visuals.widgets.inactive.expansion = 0.0;
     
     // ── Hovered widgets ────────────────────────────────────────────────
     style.visuals.widgets.hovered.bg_fill = BG_WIDGET_HOVER;
     style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, BORDER_HOVER);
-    style.visuals.widgets.hovered.rounding = egui::Rounding::same(8.0);
+    style.visuals.widgets.hovered.rounding = egui::Rounding::same(2.0);
     style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, egui::Color32::WHITE);
     style.visuals.widgets.hovered.expansion = 1.0;
     
     // ── Active (pressed / focused) widgets ─────────────────────────────
     style.visuals.widgets.active.bg_fill = BG_WIDGET_ACTIVE;
     style.visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, BORDER_FOCUS);
-    style.visuals.widgets.active.rounding = egui::Rounding::same(8.0);
+    style.visuals.widgets.active.rounding = egui::Rounding::same(2.0);
     style.visuals.widgets.active.fg_stroke = egui::Stroke::new(2.0, egui::Color32::WHITE);
     style.visuals.widgets.active.expansion = 0.0;
     
@@ -93,7 +93,7 @@ pub fn apply_theme(_theme: &Theme, ctx: &egui::Context) {
     style.visuals.selection.stroke = egui::Stroke::new(1.0, ACCENT);
     
     // ── Window styling ─────────────────────────────────────────────────
-    style.visuals.window_rounding = egui::Rounding::same(12.0);
+    style.visuals.window_rounding = egui::Rounding::same(2.0);
     style.visuals.window_shadow = egui::epaint::Shadow {
         offset: egui::vec2(0.0, 4.0),
         blur: 16.0,

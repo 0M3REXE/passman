@@ -92,7 +92,7 @@ pub fn render_onboarding(
         });
     
     // Onboarding window
-    egui::Window::new("👋 Welcome to Passman!")
+    egui::Window::new("Welcome to Passman!")
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
@@ -113,7 +113,7 @@ pub fn render_onboarding(
                     ui.add_space(12.0);
                 }
                 1 => {
-                    ui.label(egui::RichText::new("🏁 Getting Started").size(18.0).strong());
+                    ui.label(egui::RichText::new("Getting Started").size(18.0).strong());
                     ui.add_space(16.0);
                     ui.label(egui::RichText::new("1. Create a new vault with a strong master password").size(13.0));
                     ui.label(egui::RichText::new("2. Add your passwords with descriptive IDs").size(13.0));
@@ -122,7 +122,7 @@ pub fn render_onboarding(
                     ui.add_space(12.0);
                 }
                 2 => {
-                    ui.label(egui::RichText::new("⌨️ Quick Tips").size(18.0).strong());
+                    ui.label(egui::RichText::new("Quick Tips").size(18.0).strong());
                     ui.add_space(16.0);
                     ui.label(egui::RichText::new("Keyboard shortcuts (when vault is open):").size(13.0));
                     ui.add_space(8.0);
@@ -134,7 +134,7 @@ pub fn render_onboarding(
                     ui.add_space(12.0);
                 }
                 _ => {
-                    ui.label(egui::RichText::new("🚀 You're Ready!").size(18.0).strong());
+                    ui.label(egui::RichText::new("You're Ready!").size(18.0).strong());
                     ui.add_space(16.0);
                     ui.label(egui::RichText::new("Start by creating a new vault or opening an existing one.").size(13.0));
                     ui.add_space(12.0);

@@ -22,7 +22,7 @@ impl ButtonWidgets {
         )
         .fill(egui::Color32::from_rgb(79, 120, 247))
         .stroke(egui::Stroke::NONE)
-        .rounding(egui::Rounding::same(8.0));
+        .rounding(egui::Rounding::same(2.0));
         ui.add_sized(size, button)
     }
 
@@ -33,7 +33,7 @@ impl ButtonWidgets {
         )
         .fill(egui::Color32::from_rgb(42, 43, 52))
         .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(62, 64, 74)))
-        .rounding(egui::Rounding::same(8.0));
+        .rounding(egui::Rounding::same(2.0));
         ui.add_sized(size, button)
     }
 
@@ -46,7 +46,7 @@ impl ButtonWidgets {
         )
         .fill(egui::Color32::from_rgb(34, 197, 94))
         .stroke(egui::Stroke::NONE)
-        .rounding(egui::Rounding::same(8.0));
+        .rounding(egui::Rounding::same(2.0));
         ui.add_sized(size, button)
     }
 
@@ -59,7 +59,7 @@ impl ButtonWidgets {
         )
         .fill(egui::Color32::from_rgb(220, 60, 60))
         .stroke(egui::Stroke::NONE)
-        .rounding(egui::Rounding::same(8.0));
+        .rounding(egui::Rounding::same(2.0));
         ui.add_sized(size, button)
     }
 }
@@ -67,7 +67,7 @@ impl ButtonWidgets {
 /// Show inline error for a form field
 pub fn show_field_error(ui: &mut egui::Ui, form_errors: &HashMap<String, String>, field: &str) {
     if let Some(error) = form_errors.get(field) {
-        ui.colored_label(egui::Color32::from_rgb(220, 53, 69), format!("⚠ {}", error));
+        ui.colored_label(egui::Color32::from_rgb(220, 53, 69), format!("(!) {}", error));
     }
 }
 
@@ -161,7 +161,7 @@ pub fn show_password_strength_indicator(ui: &mut egui::Ui, password: &str) {
     
     // Show suggestions in a collapsible section
     if !suggestions.is_empty() {
-        ui.collapsing("💡 Suggestions", |ui| {
+        ui.collapsing("Suggestions", |ui| {
             for suggestion in suggestions {
                 ui.horizontal(|ui| {
                     ui.label("•");

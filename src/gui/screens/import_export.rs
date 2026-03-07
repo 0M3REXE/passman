@@ -24,20 +24,18 @@ impl PassmanApp {
         egui::Frame::none()
             .fill(header_bg)
             .inner_margin(egui::Margin::symmetric(20.0, 14.0))
-            .rounding(egui::Rounding::same(14.0))
+            .rounding(egui::Rounding::ZERO)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("📦").size(24.0));
-                    ui.add_space(10.0);
                     ui.label(egui::RichText::new("Import / Export").size(20.0).strong());
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let back_btn = egui::Button::new(
-                            egui::RichText::new("← Back").size(13.0)
+                            egui::RichText::new("< Back").size(13.0)
                         )
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(10.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .min_size(egui::vec2(80.0, 34.0));
                         
                         if ui.add(back_btn).clicked() {
@@ -58,13 +56,11 @@ impl PassmanApp {
                 egui::Frame::none()
                     .fill(frame_fill)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(egui::Rounding::same(16.0))
+                    .rounding(egui::Rounding::same(2.0))
                     .inner_margin(egui::Margin::same(24.0))
                     .show(ui, |ui| {
                         // Section header
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("📤").size(22.0));
-                            ui.add_space(10.0);
                             ui.label(egui::RichText::new("Export Vault").size(17.0).strong());
                         });
                         
@@ -80,9 +76,9 @@ impl PassmanApp {
                         ui.add_space(4.0);
                         
                         ui.horizontal(|ui| {
-                            ui.selectable_value(&mut self.export_format, ExportFormat::Json, "📄 JSON");
+                            ui.selectable_value(&mut self.export_format, ExportFormat::Json, "JSON");
                             ui.add_space(8.0);
-                            ui.selectable_value(&mut self.export_format, ExportFormat::Csv, "📊 CSV");
+                            ui.selectable_value(&mut self.export_format, ExportFormat::Csv, "CSV");
                         });
                         
                         ui.add_space(12.0);
@@ -98,7 +94,7 @@ impl PassmanApp {
                                     .desired_width(ui.available_width() - 90.0)
                             );
                             
-                            if self.secondary_button(ui, "📁 Browse", [80.0, 28.0]).clicked() {
+                            if self.secondary_button(ui, "Browse", [80.0, 28.0]).clicked() {
                                 let extension = match self.export_format {
                                     ExportFormat::Json => "json",
                                     ExportFormat::Csv => "csv",
@@ -126,10 +122,10 @@ impl PassmanApp {
                         // Export button
                         ui.vertical_centered(|ui| {
                             let button = egui::Button::new(
-                                egui::RichText::new("⬇ Export").size(14.0).color(egui::Color32::WHITE)
+                                egui::RichText::new("Export").size(14.0).color(egui::Color32::WHITE)
                             )
                             .fill(egui::Color32::from_rgb(34, 197, 94))
-                            .rounding(egui::Rounding::same(8.0))
+                            .rounding(egui::Rounding::same(2.0))
                             .min_size(egui::vec2(140.0, 40.0));
                             
                             if ui.add(button).clicked() {
@@ -142,7 +138,7 @@ impl PassmanApp {
                         // Info text
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                egui::RichText::new("⚠ Exported files are NOT encrypted")
+                                egui::RichText::new("(!) Exported files are NOT encrypted")
                                     .size(11.0)
                                     .color(egui::Color32::from_rgb(251, 191, 36))
                             );
@@ -157,13 +153,11 @@ impl PassmanApp {
                 egui::Frame::none()
                     .fill(frame_fill)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(egui::Rounding::same(16.0))
+                    .rounding(egui::Rounding::same(2.0))
                     .inner_margin(egui::Margin::same(24.0))
                     .show(ui, |ui| {
                         // Section header
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("📥").size(22.0));
-                            ui.add_space(10.0);
                             ui.label(egui::RichText::new("Import Data").size(17.0).strong());
                         });
                         
@@ -179,11 +173,11 @@ impl PassmanApp {
                         ui.add_space(4.0);
                         
                         ui.horizontal(|ui| {
-                            ui.selectable_value(&mut self.import_format, ImportFormat::Json, "📄 JSON");
+                            ui.selectable_value(&mut self.import_format, ImportFormat::Json, "JSON");
                             ui.add_space(4.0);
-                            ui.selectable_value(&mut self.import_format, ImportFormat::Csv, "📊 CSV");
+                            ui.selectable_value(&mut self.import_format, ImportFormat::Csv, "CSV");
                             ui.add_space(4.0);
-                            ui.selectable_value(&mut self.import_format, ImportFormat::Chrome, "🌐 Chrome");
+                            ui.selectable_value(&mut self.import_format, ImportFormat::Chrome, "Chrome");
                         });
                         
                         ui.add_space(12.0);
@@ -199,7 +193,7 @@ impl PassmanApp {
                                     .desired_width(ui.available_width() - 90.0)
                             );
                             
-                            if self.secondary_button(ui, "📁 Browse", [80.0, 28.0]).clicked() {
+                            if self.secondary_button(ui, "Browse", [80.0, 28.0]).clicked() {
                                 let (filter_name, extensions): (&str, Vec<&str>) = match self.import_format {
                                     ImportFormat::Json => ("JSON files", vec!["json"]),
                                     ImportFormat::Csv => ("CSV files", vec!["csv"]),
@@ -228,7 +222,7 @@ impl PassmanApp {
                             egui::RichText::new(if self.merge_on_import {
                                 "New entries will be added, existing ones kept"
                             } else {
-                                "⚠ All existing entries will be replaced"
+                                "(!!) All existing entries will be replaced"
                             })
                             .size(11.0)
                             .color(if self.merge_on_import { muted_color } else { egui::Color32::from_rgb(251, 191, 36) })
@@ -239,10 +233,10 @@ impl PassmanApp {
                         // Import button
                         ui.vertical_centered(|ui| {
                             let button = egui::Button::new(
-                                egui::RichText::new("⬆ Import").size(14.0).color(egui::Color32::WHITE)
+                                egui::RichText::new("Import").size(14.0).color(egui::Color32::WHITE)
                             )
                             .fill(egui::Color32::from_rgb(59, 130, 246))
-                            .rounding(egui::Rounding::same(8.0))
+                            .rounding(egui::Rounding::same(2.0))
                             .min_size(egui::vec2(140.0, 40.0));
                             
                             if ui.add(button).clicked() {

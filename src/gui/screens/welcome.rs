@@ -41,7 +41,7 @@ impl PassmanApp {
             egui::Frame::none()
                 .fill(frame_fill)
                 .stroke(egui::Stroke::new(1.0, border_color))
-                .rounding(egui::Rounding::same(16.0))
+                .rounding(egui::Rounding::same(2.0))
                 .inner_margin(egui::Margin::same(32.0))
                 .show(ui, |ui| {
                     ui.set_width(320.0);
@@ -80,10 +80,10 @@ impl PassmanApp {
                                 
                                 if ui.add_sized(
                                     egui::vec2(browse_btn_size, field_height),
-                                    egui::Button::new("📁")
+                                    egui::Button::new("...")
                                         .fill(egui::Color32::from_rgb(42, 43, 52))
                                         .stroke(egui::Stroke::new(1.0, border_color))
-                                        .rounding(egui::Rounding::same(8.0))
+                                        .rounding(egui::Rounding::same(2.0))
                                 ).on_hover_text("Browse for vault file").clicked() {
                                     if let Some(path) = rfd::FileDialog::new()
                                         .set_title("Select Vault File")
@@ -115,7 +115,7 @@ impl PassmanApp {
                                     .color(egui::Color32::WHITE)
                             )
                             .fill(egui::Color32::from_rgb(79, 120, 247))
-                            .rounding(egui::Rounding::same(10.0))
+                            .rounding(egui::Rounding::same(2.0))
                             .min_size(egui::vec2(btn_width, btn_height));
                             
                             if ui.add(open_btn).clicked() {
@@ -130,7 +130,7 @@ impl PassmanApp {
                             )
                             .fill(egui::Color32::TRANSPARENT)
                             .stroke(egui::Stroke::new(1.0, border_color))
-                            .rounding(egui::Rounding::same(10.0))
+                            .rounding(egui::Rounding::same(2.0))
                             .min_size(egui::vec2(btn_width, btn_height));
                             
                             if ui.add(create_btn).clicked() {
@@ -144,7 +144,7 @@ impl PassmanApp {
                                     .color(egui::Color32::WHITE)
                             )
                             .fill(egui::Color32::from_rgb(34, 197, 94))
-                            .rounding(egui::Rounding::same(10.0))
+                            .rounding(egui::Rounding::same(2.0))
                             .min_size(egui::vec2(btn_width, btn_height));
                             
                             if ui.add(create_btn).clicked() {
@@ -170,7 +170,7 @@ impl PassmanApp {
                 // Settings button
                 if ui.add(
                     egui::Button::new(
-                        egui::RichText::new("⚙ Settings").size(11.0).color(muted_color)
+                        egui::RichText::new("Settings").size(11.0).color(muted_color)
                     )
                     .fill(egui::Color32::TRANSPARENT)
                     .stroke(egui::Stroke::NONE)
@@ -183,7 +183,7 @@ impl PassmanApp {
                 // Help button
                 if ui.add(
                     egui::Button::new(
-                        egui::RichText::new("❓ Help").size(11.0).color(muted_color)
+                        egui::RichText::new("? Help").size(11.0).color(muted_color)
                     )
                     .fill(egui::Color32::TRANSPARENT)
                     .stroke(egui::Stroke::NONE)
@@ -196,7 +196,7 @@ impl PassmanApp {
                 
                 // Troubleshooting menu
                 ui.menu_button(
-                    egui::RichText::new("🔧 Troubleshoot").size(11.0).color(muted_color),
+                    egui::RichText::new("Troubleshoot").size(11.0).color(muted_color),
                     |ui| {
                         if ui.button("Reset to default vault").clicked() {
                             self.vault_file = "vault.dat".to_string();
@@ -211,7 +211,7 @@ impl PassmanApp {
                         }
                         ui.separator();
                         ui.label(
-                            egui::RichText::new("⚠ Forgot password = lost vault")
+                            egui::RichText::new("(!) Forgot password = lost vault")
                                 .size(11.0)
                                 .color(egui::Color32::from_rgb(251, 191, 36))
                         );
@@ -259,8 +259,6 @@ impl PassmanApp {
             ui.add_space(24.0);
             
             // Header
-            ui.label(egui::RichText::new("✨").size(44.0));
-            ui.add_space(8.0);
             ui.label(egui::RichText::new("Create New Vault").size(24.0).strong());
             ui.add_space(4.0);
             ui.label(
@@ -275,10 +273,11 @@ impl PassmanApp {
             egui::Frame::none()
                 .fill(frame_fill)
                 .stroke(egui::Stroke::new(1.0, border_color))
-                .rounding(egui::Rounding::same(16.0))
+                .rounding(egui::Rounding::same(2.0))
                 .inner_margin(egui::Margin::same(28.0))
                 .show(ui, |ui| {
                     ui.set_width(320.0);
+                    ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     
                     let field_width = 280.0;
                     let field_height = 38.0;
@@ -331,7 +330,7 @@ impl PassmanApp {
                                 .color(egui::Color32::WHITE)
                         )
                         .fill(egui::Color32::from_rgb(34, 197, 94))
-                        .rounding(egui::Rounding::same(10.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .min_size(egui::vec2(btn_width, 42.0));
                         
                         if ui.add(create_btn).clicked() {
@@ -352,7 +351,7 @@ impl PassmanApp {
                         )
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(10.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .min_size(egui::vec2(btn_width, 42.0));
                         
                         if ui.add(back_btn).clicked() {
@@ -361,13 +360,14 @@ impl PassmanApp {
                             *self.init_confirm = String::new();
                         }
                     });
+                    }); // end with_layout
                 });
             
             ui.add_space(16.0);
             
             // Security tip
             ui.label(
-                egui::RichText::new("💡 Use a unique password you don't use elsewhere")
+                egui::RichText::new("Tip: Use a unique password you don't use elsewhere")
                     .size(11.0)
                     .color(muted_color)
             );
@@ -402,7 +402,7 @@ impl PassmanApp {
             egui::Frame::none()
                 .fill(frame_fill)
                 .stroke(egui::Stroke::new(1.0, border_color))
-                .rounding(egui::Rounding::same(16.0))
+                .rounding(egui::Rounding::same(2.0))
                 .inner_margin(egui::Margin::same(32.0))
                 .show(ui, |ui| {
                     ui.set_width(320.0);
@@ -443,7 +443,7 @@ impl PassmanApp {
                                 .color(egui::Color32::WHITE)
                         )
                         .fill(egui::Color32::from_rgb(79, 120, 247))
-                        .rounding(egui::Rounding::same(10.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .min_size(egui::vec2(btn_width, 44.0));
                         
                         if ui.add(open_btn).clicked() {
@@ -464,7 +464,7 @@ impl PassmanApp {
                         )
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(10.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .min_size(egui::vec2(btn_width, 44.0));
                         
                         if ui.add(back_btn).clicked() {
@@ -477,7 +477,7 @@ impl PassmanApp {
             // Vault info
             ui.add_space(20.0);
             ui.label(
-                egui::RichText::new(format!("📁 {}", self.vault_file))
+                egui::RichText::new(format!("Vault: {}", self.vault_file))
                     .size(11.0)
                     .color(egui::Color32::from_rgb(70, 72, 84))
             );

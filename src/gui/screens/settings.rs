@@ -24,20 +24,18 @@ impl PassmanApp {
         egui::Frame::none()
             .fill(theme::header_bg_color(&current_theme))
             .inner_margin(egui::Margin::symmetric(20.0, 14.0))
-            .rounding(egui::Rounding::same(14.0))
+            .rounding(egui::Rounding::ZERO)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("⚙").size(22.0));
-                    ui.add_space(10.0);
                     ui.label(egui::RichText::new("Settings").size(20.0).strong());
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let back_btn = egui::Button::new(
-                            egui::RichText::new("← Back").size(13.0)
+                            egui::RichText::new("< Back").size(13.0)
                         )
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(10.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .min_size(egui::vec2(80.0, 34.0));
                         
                         if ui.add(back_btn).clicked() {
@@ -64,12 +62,12 @@ impl PassmanApp {
                 egui::Frame::none()
                     .fill(frame_fill)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(egui::Rounding::same(16.0))
+                    .rounding(egui::Rounding::same(2.0))
                     .inner_margin(egui::Margin::same(24.0))
                     .show(ui, |ui| {
                         ui.set_width(card_width);
                         
-                        ui.label(egui::RichText::new("📁 Vault").size(15.0).strong());
+                        ui.label(egui::RichText::new("Vault").size(15.0).strong());
                         ui.add_space(14.0);
                         
                         // Current vault file
@@ -94,7 +92,7 @@ impl PassmanApp {
                         
                         egui::Frame::none()
                             .fill(egui::Color32::from_rgba_unmultiplied(0, 0, 0, 30))
-                            .rounding(egui::Rounding::same(10.0))
+                            .rounding(egui::Rounding::same(2.0))
                             .inner_margin(egui::Margin::same(12.0))
                             .show(ui, |ui| {
                                 egui::ScrollArea::vertical().max_height(100.0).show(ui, |ui| {
@@ -125,7 +123,7 @@ impl PassmanApp {
                                                             let select_btn = egui::Button::new(
                                                                 egui::RichText::new("Select").size(11.0)
                                                             )
-                                                            .rounding(egui::Rounding::same(8.0))
+                                                            .rounding(egui::Rounding::same(2.0))
                                                             .min_size(egui::vec2(56.0, 26.0));
                                                             
                                                             if ui.add(select_btn).clicked() {
@@ -155,13 +153,13 @@ impl PassmanApp {
                     egui::Frame::none()
                         .fill(frame_fill)
                         .stroke(egui::Stroke::new(1.0, border_color))
-                        .rounding(egui::Rounding::same(16.0))
+                        .rounding(egui::Rounding::same(2.0))
                         .inner_margin(egui::Margin::same(24.0))
                         .show(ui, |ui| {
                             ui.set_width(card_width);
                             
                             egui::CollapsingHeader::new(
-                                egui::RichText::new("🔑 Change Master Password").size(15.0).strong()
+                                egui::RichText::new("Change Master Password").size(15.0).strong()
                             )
                             .default_open(false)
                             .show(ui, |ui| {
@@ -223,7 +221,7 @@ impl PassmanApp {
                                         .color(egui::Color32::WHITE)
                                 )
                                 .fill(egui::Color32::from_rgb(79, 120, 247))
-                                .rounding(egui::Rounding::same(10.0))
+                                .rounding(egui::Rounding::same(2.0))
                                 .min_size(egui::vec2(160.0, 40.0));
                                 
                                 if ui.add(change_btn).clicked() {
@@ -268,12 +266,12 @@ impl PassmanApp {
                 egui::Frame::none()
                     .fill(frame_fill)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(egui::Rounding::same(16.0))
+                    .rounding(egui::Rounding::same(2.0))
                     .inner_margin(egui::Margin::same(24.0))
                     .show(ui, |ui| {
                         ui.set_width(card_width);
                         
-                        ui.label(egui::RichText::new("ℹ About").size(15.0).strong());
+                        ui.label(egui::RichText::new("About").size(15.0).strong());
                         ui.add_space(14.0);
                         
                         ui.vertical_centered(|ui| {
