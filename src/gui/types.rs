@@ -6,7 +6,6 @@ use std::time::Instant;
 
 // UI Constants
 pub const BUTTON_HEIGHT: f32 = 36.0;
-pub const INPUT_WIDTH: f32 = 350.0;
 pub const SPACING: f32 = 10.0;
 pub const PADDING: f32 = 20.0;
 

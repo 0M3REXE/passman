@@ -5,7 +5,7 @@
 use eframe::egui;
 use crate::security::vault::VaultManager;
 use crate::utils::import_export::ImportExportManager;
-use super::super::types::{Screen, ExportFormat, ImportFormat, SPACING};
+use super::super::types::{Screen, ExportFormat, ImportFormat};
 use super::super::theme;
 use super::super::app::PassmanApp;
 
@@ -23,20 +23,22 @@ impl PassmanApp {
         // ════════════════════════════════════════════════════════════════════
         egui::Frame::none()
             .fill(header_bg)
-            .inner_margin(egui::Margin::symmetric(16.0, 12.0))
-            .rounding(egui::Rounding::same(10.0))
+            .inner_margin(egui::Margin::symmetric(20.0, 14.0))
+            .rounding(egui::Rounding::same(14.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("📦").size(24.0));
-                    ui.add_space(8.0);
+                    ui.add_space(10.0);
                     ui.label(egui::RichText::new("Import / Export").size(20.0).strong());
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let back_btn = egui::Button::new("Back")
-                            .fill(egui::Color32::from_rgb(55, 65, 81))
-                            .stroke(egui::Stroke::new(1.0, border_color))
-                            .rounding(egui::Rounding::same(6.0))
-                            .min_size(egui::vec2(70.0, 28.0));
+                        let back_btn = egui::Button::new(
+                            egui::RichText::new("← Back").size(13.0)
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::new(1.0, border_color))
+                        .rounding(egui::Rounding::same(10.0))
+                        .min_size(egui::vec2(80.0, 34.0));
                         
                         if ui.add(back_btn).clicked() {
                             self.current_screen = Screen::Main;
@@ -45,7 +47,7 @@ impl PassmanApp {
                 });
             });
         
-        ui.add_space(SPACING * 2.0);
+        ui.add_space(20.0);
         
         // Two-column layout for export and import
         ui.columns(2, |columns| {
@@ -56,22 +58,22 @@ impl PassmanApp {
                 egui::Frame::none()
                     .fill(frame_fill)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(egui::Rounding::same(12.0))
-                    .inner_margin(egui::Margin::same(20.0))
+                    .rounding(egui::Rounding::same(16.0))
+                    .inner_margin(egui::Margin::same(24.0))
                     .show(ui, |ui| {
                         // Section header
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("📤").size(20.0));
-                            ui.add_space(8.0);
-                            ui.label(egui::RichText::new("Export Vault").size(16.0).strong());
+                            ui.label(egui::RichText::new("📤").size(22.0));
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("Export Vault").size(17.0).strong());
                         });
                         
                         ui.add_space(4.0);
                         ui.label(egui::RichText::new("Save your passwords to a file").size(12.0).color(muted_color));
                         
-                        ui.add_space(SPACING * 1.5);
+                        ui.add_space(16.0);
                         ui.separator();
-                        ui.add_space(SPACING);
+                        ui.add_space(12.0);
                         
                         // Format selection
                         ui.label(egui::RichText::new("Format").size(13.0).strong());
@@ -83,7 +85,7 @@ impl PassmanApp {
                             ui.selectable_value(&mut self.export_format, ExportFormat::Csv, "📊 CSV");
                         });
                         
-                        ui.add_space(SPACING);
+                        ui.add_space(12.0);
                         
                         // File path with browse button
                         ui.label(egui::RichText::new("Destination").size(13.0).strong());
@@ -119,7 +121,7 @@ impl PassmanApp {
                             }
                         });
                         
-                        ui.add_space(SPACING * 1.5);
+                        ui.add_space(16.0);
                         
                         // Export button
                         ui.vertical_centered(|ui| {
@@ -135,7 +137,7 @@ impl PassmanApp {
                             }
                         });
                         
-                        ui.add_space(SPACING);
+                        ui.add_space(12.0);
                         
                         // Info text
                         ui.vertical_centered(|ui| {
@@ -155,22 +157,22 @@ impl PassmanApp {
                 egui::Frame::none()
                     .fill(frame_fill)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .rounding(egui::Rounding::same(12.0))
-                    .inner_margin(egui::Margin::same(20.0))
+                    .rounding(egui::Rounding::same(16.0))
+                    .inner_margin(egui::Margin::same(24.0))
                     .show(ui, |ui| {
                         // Section header
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("📥").size(20.0));
-                            ui.add_space(8.0);
-                            ui.label(egui::RichText::new("Import Data").size(16.0).strong());
+                            ui.label(egui::RichText::new("📥").size(22.0));
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("Import Data").size(17.0).strong());
                         });
                         
                         ui.add_space(4.0);
                         ui.label(egui::RichText::new("Load passwords from a file").size(12.0).color(muted_color));
                         
-                        ui.add_space(SPACING * 1.5);
+                        ui.add_space(16.0);
                         ui.separator();
-                        ui.add_space(SPACING);
+                        ui.add_space(12.0);
                         
                         // Format selection
                         ui.label(egui::RichText::new("Format").size(13.0).strong());
@@ -184,7 +186,7 @@ impl PassmanApp {
                             ui.selectable_value(&mut self.import_format, ImportFormat::Chrome, "🌐 Chrome");
                         });
                         
-                        ui.add_space(SPACING);
+                        ui.add_space(12.0);
                         
                         // File path with browse button
                         ui.label(egui::RichText::new("Source File").size(13.0).strong());
@@ -215,7 +217,7 @@ impl PassmanApp {
                             }
                         });
                         
-                        ui.add_space(SPACING);
+                        ui.add_space(12.0);
                         
                         // Merge option
                         ui.horizontal(|ui| {
@@ -232,7 +234,7 @@ impl PassmanApp {
                             .color(if self.merge_on_import { muted_color } else { egui::Color32::from_rgb(251, 191, 36) })
                         );
                         
-                        ui.add_space(SPACING * 1.5);
+                        ui.add_space(16.0);
                         
                         // Import button
                         ui.vertical_centered(|ui| {
@@ -248,7 +250,7 @@ impl PassmanApp {
                             }
                         });
                         
-                        ui.add_space(SPACING);
+                        ui.add_space(12.0);
                         
                         // Format help
                         ui.vertical_centered(|ui| {

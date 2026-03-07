@@ -3,7 +3,7 @@
 //! Modal dialogs, loading overlays, and onboarding wizard.
 
 use eframe::egui;
-use super::types::{SPACING, BUTTON_HEIGHT};
+// Overlay types
 use super::widgets::ButtonWidgets;
 
 /// Show loading overlay with animated spinner
@@ -96,92 +96,93 @@ pub fn render_onboarding(
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .fixed_size([450.0, 350.0])
+        .fixed_size([480.0, 380.0])
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
-            ui.add_space(SPACING);
+            ui.add_space(12.0);
             
             match *onboarding_step {
                 0 => {
-                    ui.heading("🔐 Secure Password Management");
-                    ui.add_space(SPACING * 2.0);
-                    ui.label("Passman helps you securely store and manage all your passwords in one place.");
-                    ui.add_space(SPACING);
-                    ui.label("• Military-grade AES-256-GCM encryption");
-                    ui.label("• Argon2id key derivation for maximum security");
-                    ui.label("• Zero-knowledge design - only you have access");
-                    ui.add_space(SPACING);
+                    ui.label(egui::RichText::new("🔐 Secure Password Management").size(18.0).strong());
+                    ui.add_space(16.0);
+                    ui.label(egui::RichText::new("Passman helps you securely store and manage all your passwords in one place.").size(13.0));
+                    ui.add_space(12.0);
+                    ui.label(egui::RichText::new("• Military-grade AES-256-GCM encryption").size(13.0));
+                    ui.label(egui::RichText::new("• Argon2id key derivation for maximum security").size(13.0));
+                    ui.label(egui::RichText::new("• Zero-knowledge design - only you have access").size(13.0));
+                    ui.add_space(12.0);
                 }
                 1 => {
-                    ui.heading("🏁 Getting Started");
-                    ui.add_space(SPACING * 2.0);
-                    ui.label("1. Create a new vault with a strong master password");
-                    ui.label("2. Add your passwords with descriptive IDs");
-                    ui.label("3. Copy passwords to clipboard with one click");
-                    ui.label("4. Use the Health Dashboard to check password strength");
-                    ui.add_space(SPACING);
+                    ui.label(egui::RichText::new("🏁 Getting Started").size(18.0).strong());
+                    ui.add_space(16.0);
+                    ui.label(egui::RichText::new("1. Create a new vault with a strong master password").size(13.0));
+                    ui.label(egui::RichText::new("2. Add your passwords with descriptive IDs").size(13.0));
+                    ui.label(egui::RichText::new("3. Copy passwords to clipboard with one click").size(13.0));
+                    ui.label(egui::RichText::new("4. Use the Health Dashboard to check password strength").size(13.0));
+                    ui.add_space(12.0);
                 }
                 2 => {
-                    ui.heading("⌨️ Quick Tips");
-                    ui.add_space(SPACING * 2.0);
-                    ui.label("Keyboard shortcuts (when vault is open):");
-                    ui.add_space(SPACING / 2.0);
-                    ui.label("• Ctrl+N - Create new entry");
-                    ui.label("• Ctrl+F - Search entries");
-                    ui.label("• Ctrl+L - Lock vault");
-                    ui.label("• Ctrl+H - Health dashboard");
-                    ui.label("• Escape - Go back");
-                    ui.add_space(SPACING);
+                    ui.label(egui::RichText::new("⌨️ Quick Tips").size(18.0).strong());
+                    ui.add_space(16.0);
+                    ui.label(egui::RichText::new("Keyboard shortcuts (when vault is open):").size(13.0));
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("• Ctrl+N - Create new entry").size(13.0));
+                    ui.label(egui::RichText::new("• Ctrl+F - Search entries").size(13.0));
+                    ui.label(egui::RichText::new("• Ctrl+L - Lock vault").size(13.0));
+                    ui.label(egui::RichText::new("• Ctrl+H - Health dashboard").size(13.0));
+                    ui.label(egui::RichText::new("• Escape - Go back").size(13.0));
+                    ui.add_space(12.0);
                 }
                 _ => {
-                    ui.heading("🚀 You're Ready!");
-                    ui.add_space(SPACING * 2.0);
-                    ui.label("Start by creating a new vault or opening an existing one.");
-                    ui.add_space(SPACING);
-                    ui.label("Remember: Your master password cannot be recovered!");
-                    ui.label("Choose something strong and memorable.");
-                    ui.add_space(SPACING);
+                    ui.label(egui::RichText::new("🚀 You're Ready!").size(18.0).strong());
+                    ui.add_space(16.0);
+                    ui.label(egui::RichText::new("Start by creating a new vault or opening an existing one.").size(13.0));
+                    ui.add_space(12.0);
+                    ui.label(egui::RichText::new("Remember: Your master password cannot be recovered!").size(13.0));
+                    ui.label(egui::RichText::new("Choose something strong and memorable.").size(13.0));
+                    ui.add_space(12.0);
                 }
             }
             
-            ui.add_space(SPACING * 2.0);
+            ui.add_space(16.0);
             
             // Progress dots
             ui.horizontal(|ui| {
                 for i in 0..4 {
                     let color = if i == *onboarding_step {
-                        egui::Color32::from_rgb(70, 130, 180)
+                        egui::Color32::from_rgb(99, 138, 255)
                     } else {
-                        egui::Color32::from_gray(150)
+                        egui::Color32::from_gray(100)
                     };
                     ui.painter().circle_filled(
-                        ui.cursor().min + egui::vec2(i as f32 * 15.0 + 7.0, 5.0),
-                        5.0,
+                        ui.cursor().min + egui::vec2(i as f32 * 18.0 + 7.0, 5.0),
+                        6.0,
                         color,
                     );
                 }
-                ui.add_space(60.0);
+                ui.add_space(72.0);
             });
             
-            ui.add_space(SPACING * 2.0);
+            ui.add_space(20.0);
             
             ui.horizontal(|ui| {
-                let btn_width = 90.0;
+                let btn_width = 100.0;
+                let btn_height = 38.0;
                 
-                if *onboarding_step > 0 && ButtonWidgets::secondary(ui, "Back", [btn_width, BUTTON_HEIGHT]).clicked() {
+                if *onboarding_step > 0 && ButtonWidgets::secondary(ui, "Back", [btn_width, btn_height]).clicked() {
                     *onboarding_step -= 1;
                 }
                 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if *onboarding_step < 3 {
-                        if ButtonWidgets::primary(ui, "Next", [btn_width, BUTTON_HEIGHT]).clicked() {
+                        if ButtonWidgets::primary(ui, "Next", [btn_width, btn_height]).clicked() {
                             *onboarding_step += 1;
                         }
                         
-                        if ButtonWidgets::secondary(ui, "Skip", [btn_width, BUTTON_HEIGHT]).clicked() {
+                        if ButtonWidgets::secondary(ui, "Skip", [btn_width, btn_height]).clicked() {
                             *show_onboarding = false;
                         }
-                    } else if ButtonWidgets::success(ui, "Get Started", [110.0, BUTTON_HEIGHT]).clicked() {
+                    } else if ButtonWidgets::success(ui, "Get Started", [120.0, btn_height]).clicked() {
                         *show_onboarding = false;
                     }
                 });

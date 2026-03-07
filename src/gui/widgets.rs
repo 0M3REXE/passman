@@ -1,6 +1,6 @@
 //! Widgets Module
 //!
-//! Reusable UI widgets and button helpers.
+//! Reusable UI widgets and button helpers with modern styling.
 
 use eframe::egui;
 use std::collections::HashMap;
@@ -9,49 +9,57 @@ use std::collections::HashMap;
 // BUTTON WIDGETS
 // ============================================================================
 
-/// Button style helpers for consistent UI
+/// Button style helpers for consistent modern UI
 pub struct ButtonWidgets;
 
 impl ButtonWidgets {
-    /// Primary action button (steel blue) with rounded style
+    /// Primary action button (accent blue) with modern rounded style
     pub fn primary(ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
         let button = egui::Button::new(
-            egui::RichText::new(text).color(egui::Color32::WHITE)
+            egui::RichText::new(text)
+                .color(egui::Color32::WHITE)
+                .size(13.0)
         )
-        .fill(egui::Color32::from_rgb(59, 130, 246))
+        .fill(egui::Color32::from_rgb(79, 120, 247))
         .stroke(egui::Stroke::NONE)
-        .rounding(egui::Rounding::same(6.0));
+        .rounding(egui::Rounding::same(8.0));
         ui.add_sized(size, button)
     }
 
-    /// Secondary action button (subtle gray)
+    /// Secondary action button (translucent with border)
     pub fn secondary(ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
-        let button = egui::Button::new(text)
-            .fill(egui::Color32::from_rgb(75, 85, 99))
-            .stroke(egui::Stroke::NONE)
-            .rounding(egui::Rounding::same(6.0));
+        let button = egui::Button::new(
+            egui::RichText::new(text).size(13.0)
+        )
+        .fill(egui::Color32::from_rgb(42, 43, 52))
+        .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(62, 64, 74)))
+        .rounding(egui::Rounding::same(8.0));
         ui.add_sized(size, button)
     }
 
     /// Success/confirm button (green)
     pub fn success(ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
         let button = egui::Button::new(
-            egui::RichText::new(text).color(egui::Color32::WHITE)
+            egui::RichText::new(text)
+                .color(egui::Color32::WHITE)
+                .size(13.0)
         )
         .fill(egui::Color32::from_rgb(34, 197, 94))
         .stroke(egui::Stroke::NONE)
-        .rounding(egui::Rounding::same(6.0));
+        .rounding(egui::Rounding::same(8.0));
         ui.add_sized(size, button)
     }
 
     /// Danger/delete button (red)
     pub fn danger(ui: &mut egui::Ui, text: &str, size: [f32; 2]) -> egui::Response {
         let button = egui::Button::new(
-            egui::RichText::new(text).color(egui::Color32::WHITE)
+            egui::RichText::new(text)
+                .color(egui::Color32::WHITE)
+                .size(13.0)
         )
-        .fill(egui::Color32::from_rgb(239, 68, 68))
+        .fill(egui::Color32::from_rgb(220, 60, 60))
         .stroke(egui::Stroke::NONE)
-        .rounding(egui::Rounding::same(6.0));
+        .rounding(egui::Rounding::same(8.0));
         ui.add_sized(size, button)
     }
 }
@@ -236,11 +244,15 @@ pub fn paint_strength_dots(ui: &mut egui::Ui, score: u32) {
 /// Empty state widget with icon and message
 pub fn empty_state(ui: &mut egui::Ui, icon: &str, title: &str, subtitle: &str) {
     ui.vertical_centered(|ui| {
-        ui.add_space(60.0);
-        ui.label(egui::RichText::new(icon).size(48.0));
-        ui.add_space(16.0);
-        ui.label(egui::RichText::new(title).size(18.0).strong());
-        ui.add_space(8.0);
-        ui.label(egui::RichText::new(subtitle).size(14.0).color(egui::Color32::from_rgb(156, 163, 175)));
+        ui.add_space(80.0);
+        ui.label(egui::RichText::new(icon).size(56.0));
+        ui.add_space(20.0);
+        ui.label(egui::RichText::new(title).size(20.0).strong());
+        ui.add_space(10.0);
+        ui.label(
+            egui::RichText::new(subtitle)
+                .size(14.0)
+                .color(egui::Color32::from_rgb(140, 144, 160))
+        );
     });
 }

@@ -3,7 +3,7 @@
 //! Main vault screen with entry list and search.
 
 use eframe::egui;
-use super::super::types::{Screen, SPACING};
+use super::super::types::Screen;
 use super::super::theme;
 use super::super::widgets;
 use super::super::app::PassmanApp;
@@ -13,26 +13,27 @@ impl PassmanApp {
     pub fn show_main_screen(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         // Copy theme to avoid borrow issues
         let current_theme = self.current_theme;
+        let dim_color = theme::dim_text_color(&current_theme);
         
         // ════════════════════════════════════════════════════════════════════
         // HEADER BAR
         // ════════════════════════════════════════════════════════════════════
         egui::Frame::none()
             .fill(theme::header_bg_color(&current_theme))
-            .inner_margin(egui::Margin::symmetric(16.0, 12.0))
-            .rounding(egui::Rounding::same(10.0))
+            .inner_margin(egui::Margin::symmetric(20.0, 14.0))
+            .rounding(egui::Rounding::same(14.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     // Title section
-                    ui.label(egui::RichText::new("🔐").size(24.0));
-                    ui.add_space(8.0);
-                    ui.label(egui::RichText::new("Password Vault").size(20.0).strong());
+                    ui.label(egui::RichText::new("🔐").size(26.0));
+                    ui.add_space(10.0);
+                    ui.label(egui::RichText::new("Password Vault").size(22.0).strong());
                     
                     // Keyboard shortcuts hint
-                    ui.add_space(8.0);
+                    ui.add_space(10.0);
                     ui.label(
                         egui::RichText::new("⌨")
-                            .size(14.0)
+                            .size(15.0)
                             .color(theme::muted_text_color(&current_theme))
                     ).on_hover_text(
                         "Keyboard Shortcuts:\n\
@@ -49,32 +50,32 @@ impl PassmanApp {
                         ui.spacing_mut().item_spacing.x = 8.0;
                         
                         // Lock button
-                        if self.secondary_button(ui, "Lock", [65.0, 32.0]).clicked() {
+                        if self.secondary_button(ui, "🔒 Lock", [80.0, 34.0]).clicked() {
                             self.lock_vault();
                             self.toast_info("Vault locked".to_string());
                         }
                         
                         // Settings
-                        if self.secondary_button(ui, "⚙", [36.0, 32.0]).clicked() {
+                        if self.secondary_button(ui, "⚙", [38.0, 34.0]).clicked() {
                             self.current_screen = Screen::Settings;
                         }
                         
-                        ui.add_space(4.0);
+                        ui.add_space(6.0);
                         
                         // Health dashboard
-                        if self.primary_button(ui, "Health", [70.0, 32.0]).clicked() {
+                        if self.primary_button(ui, "❤ Health", [85.0, 34.0]).clicked() {
                             self.current_screen = Screen::HealthDashboard;
                         }
                         
                         // Export
-                        if self.secondary_button(ui, "Export", [70.0, 32.0]).clicked() {
+                        if self.secondary_button(ui, "↗ Export", [80.0, 34.0]).clicked() {
                             self.current_screen = Screen::ImportExport;
                         }
                         
-                        ui.add_space(4.0);
+                        ui.add_space(6.0);
                         
                         // Add button (prominent)
-                        if self.success_button(ui, "+ Add", [65.0, 32.0]).clicked() {
+                        if self.success_button(ui, "+ Add", [72.0, 34.0]).clicked() {
                             self.current_screen = Screen::AddEntry;
                             self.clear_add_form();
                         }
@@ -82,7 +83,7 @@ impl PassmanApp {
                 });
             });
         
-        ui.add_space(SPACING);
+        ui.add_space(12.0);
         
         // Get colors upfront
         let search_bg = theme::search_bg_color(&current_theme);
@@ -97,18 +98,21 @@ impl PassmanApp {
             // Styled search bar
             let search_response = egui::Frame::none()
                 .fill(search_bg)
-                .rounding(egui::Rounding::same(8.0))
+                .rounding(egui::Rounding::same(12.0))
                 .stroke(egui::Stroke::new(1.0, border_col))
-                .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+                .inner_margin(egui::Margin::symmetric(14.0, 10.0))
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("🔍").size(14.0).color(muted_col));
-                        ui.add_space(6.0);
+                        ui.label(egui::RichText::new("🔍").size(15.0).color(muted_col));
+                        ui.add_space(8.0);
                         let response = ui.add(
                             egui::TextEdit::singleline(&mut self.search_query)
-                                .hint_text("Search entries... (Ctrl+F)")
+                                .hint_text(
+                                    egui::RichText::new("Search entries... (Ctrl+F)")
+                                        .color(dim_color)
+                                )
                                 .frame(false)
-                                .desired_width(220.0)
+                                .desired_width(260.0)
                         );
                         response
                     }).inner
@@ -123,7 +127,9 @@ impl PassmanApp {
             // Clear search button
             if !self.search_query.is_empty()
                 && ui.add(
-                    egui::Button::new("✕")
+                    egui::Button::new(
+                        egui::RichText::new("✕").size(14.0)
+                    )
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::NONE)
                 ).clicked()
@@ -131,7 +137,7 @@ impl PassmanApp {
                 self.search_query.clear();
             }
             
-            ui.add_space(SPACING * 2.0);
+            ui.add_space(12.0);
             
             // Entry count badge
             let filtered_count = self.filter_entries().len();
@@ -144,14 +150,14 @@ impl PassmanApp {
             
             egui::Frame::none()
                 .fill(frame_col)
-                .rounding(egui::Rounding::same(12.0))
-                .inner_margin(egui::Margin::symmetric(10.0, 4.0))
+                .rounding(egui::Rounding::same(14.0))
+                .inner_margin(egui::Margin::symmetric(12.0, 6.0))
                 .show(ui, |ui| {
                     ui.label(egui::RichText::new(count_text).size(12.0).color(muted_col));
                 });
         });
         
-        ui.add_space(SPACING);
+        ui.add_space(12.0);
         
         // ════════════════════════════════════════════════════════════════════
         // ENTRIES LIST
@@ -189,7 +195,7 @@ impl PassmanApp {
             } else {
                 for (id, entry) in filtered_entries.iter() {
                     self.render_entry_card(ui, ctx, id, entry);
-                    ui.add_space(8.0);
+                    ui.add_space(10.0);
                 }
             }
         });
@@ -216,7 +222,7 @@ impl PassmanApp {
         
         egui::Frame::none()
             .fill(frame_fill)
-            .rounding(egui::Rounding::same(12.0))
+            .rounding(egui::Rounding::same(14.0))
             .stroke(egui::Stroke::new(1.0, border_color))
             .inner_margin(egui::Margin::same(0.0))
             .show(ui, |ui| {
@@ -225,14 +231,14 @@ impl PassmanApp {
                     // LEFT ACCENT BAR (password strength indicator)
                     // ─────────────────────────────────────────────────────────
                     let (accent_rect, _) = ui.allocate_exact_size(
-                        egui::vec2(4.0, 80.0),
+                        egui::vec2(5.0, 90.0),
                         egui::Sense::hover()
                     );
                     ui.painter().rect_filled(
                         accent_rect,
                         egui::Rounding {
-                            nw: 12.0,
-                            sw: 12.0,
+                            nw: 14.0,
+                            sw: 14.0,
                             ne: 0.0,
                             se: 0.0,
                         },
@@ -242,15 +248,15 @@ impl PassmanApp {
                     // ─────────────────────────────────────────────────────────
                     // CONTENT AREA
                     // ─────────────────────────────────────────────────────────
-                    ui.add_space(12.0);
+                    ui.add_space(14.0);
                     
                     ui.vertical(|ui| {
-                        ui.add_space(10.0);
+                        ui.add_space(12.0);
                         
                         // Entry title with strength dots
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(format!("🔑 {}", id_owned)).size(15.0).strong());
-                            ui.add_space(8.0);
+                            ui.label(egui::RichText::new(format!("🔑 {}", id_owned)).size(16.0).strong());
+                            ui.add_space(10.0);
                             widgets::paint_strength_dots(ui, strength_score);
                         });
                         
@@ -258,23 +264,24 @@ impl PassmanApp {
                         
                         // Username row
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("👤").size(12.0));
+                            ui.label(egui::RichText::new("👤").size(13.0));
                             ui.add_space(4.0);
-                            ui.label(egui::RichText::new(&username).color(muted_col));
+                            ui.label(egui::RichText::new(&username).size(13.0).color(muted_col));
                         });
                         
                         // Password row
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("🔒").size(12.0));
+                            ui.label(egui::RichText::new("🔒").size(13.0));
                             ui.add_space(4.0);
                             if show_pwd {
                                 ui.add(egui::Label::new(
                                     egui::RichText::new(&password_display)
                                         .monospace()
+                                        .size(13.0)
                                         .color(egui::Color32::from_rgb(251, 191, 36))
                                 ).selectable(false));
                             } else {
-                                ui.label(egui::RichText::new("••••••••••••").color(muted_col));
+                                ui.label(egui::RichText::new("••••••••••••").size(13.0).color(muted_col));
                             }
                         });
                         
@@ -282,7 +289,7 @@ impl PassmanApp {
                         if let Some(ref note_text) = note {
                             if !note_text.is_empty() {
                                 ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("📝").size(12.0));
+                                    ui.label(egui::RichText::new("📝").size(13.0));
                                     ui.add_space(4.0);
                                     let display_note = if note_text.len() > 40 {
                                         format!("{}...", &note_text[..40])
@@ -294,23 +301,23 @@ impl PassmanApp {
                             }
                         }
                         
-                        ui.add_space(10.0);
+                        ui.add_space(12.0);
                     });
                     
                     // ─────────────────────────────────────────────────────────
                     // ACTION BUTTONS (right side)
                     // ─────────────────────────────────────────────────────────
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(12.0);
+                        ui.add_space(14.0);
                         ui.spacing_mut().item_spacing.x = 6.0;
                         
                         // Delete button
-                        if self.danger_button(ui, "🗑", [36.0, 36.0]).clicked() {
+                        if self.danger_button(ui, "🗑", [38.0, 38.0]).clicked() {
                             self.pending_delete = Some(id.to_string());
                         }
                         
                         // Copy button
-                        if self.primary_button(ui, "📋 Copy", [75.0, 36.0]).clicked() {
+                        if self.primary_button(ui, "📋 Copy", [80.0, 38.0]).clicked() {
                             match self.secure_clipboard.copy_password(&password_display) {
                                 Ok(()) => {
                                     let timeout = self.clipboard_clear_secs;
@@ -324,13 +331,13 @@ impl PassmanApp {
                         }
                         
                         // Edit button
-                        if self.success_button(ui, "✏", [36.0, 36.0]).clicked() {
+                        if self.success_button(ui, "✏", [38.0, 38.0]).clicked() {
                             self.start_edit_entry(id);
                         }
                         
                         // Show/hide password button
                         let eye_icon = if show_pwd { "🙈" } else { "👁" };
-                        if self.secondary_button(ui, eye_icon, [36.0, 36.0]).clicked() {
+                        if self.secondary_button(ui, eye_icon, [38.0, 38.0]).clicked() {
                             let current = self.show_password.entry(id.to_string()).or_insert(false);
                             *current = !*current;
                         }
