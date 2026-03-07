@@ -3,7 +3,7 @@
 //! Application settings and configuration.
 
 use eframe::egui;
-use crate::vault::VaultManager;
+use crate::security::vault::VaultManager;
 use super::super::types::{Screen, SPACING};
 use super::super::theme;
 use super::super::widgets;

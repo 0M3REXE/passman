@@ -3,8 +3,6 @@
 //! Structured logging with levels, file output, and secure handling.
 //! Ensures sensitive data is never logged.
 
-#![allow(dead_code)]
-
 use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -39,25 +37,6 @@ impl Default for LogConfig {
 }
 
 impl LogConfig {
-    /// Create a debug configuration
-    pub fn debug() -> Self {
-        Self {
-            level: LevelFilter::Debug,
-            ..Default::default()
-        }
-    }
-    
-    /// Create a production configuration (no console, file only)
-    pub fn production(file_path: PathBuf) -> Self {
-        Self {
-            level: LevelFilter::Info,
-            console_output: false,
-            file_path: Some(file_path),
-            include_timestamps: true,
-            include_module: false,
-        }
-    }
-    
     /// Create from config file settings
     pub fn from_config() -> Self {
         let config = crate::config::get_config();
@@ -210,11 +189,6 @@ pub fn init_from_config() -> Result<(), SetLoggerError> {
     init(LogConfig::from_config())
 }
 
-/// Initialize logger with default debug settings
-pub fn init_debug() -> Result<(), SetLoggerError> {
-    init(LogConfig::debug())
-}
-
 // === Logging Macros for Security-Sensitive Operations ===
 
 /// Log a security event (always logged at INFO level)
@@ -260,6 +234,7 @@ macro_rules! log_error_ctx {
 // === Helper Functions ===
 
 /// Mask sensitive data for logging (show only first and last chars)
+#[cfg(test)]
 pub fn mask_sensitive(data: &str) -> String {
     if data.len() <= 4 {
         return "*".repeat(data.len());
@@ -273,6 +248,7 @@ pub fn mask_sensitive(data: &str) -> String {
 }
 
 /// Create a safe identifier for logging (removes path separators, etc.)
+#[cfg(test)]
 pub fn safe_log_id(id: &str) -> String {
     id.chars()
         .take(50)

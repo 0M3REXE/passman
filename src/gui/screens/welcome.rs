@@ -3,7 +3,7 @@
 //! Welcome, Init (create vault), and Login screens.
 
 use eframe::egui;
-use crate::vault::VaultManager;
+use crate::security::vault::VaultManager;
 use super::super::types::Screen;
 use super::super::theme;
 use super::super::app::PassmanApp;

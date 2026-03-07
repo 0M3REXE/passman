@@ -2,19 +2,18 @@
 //!
 //! Core PassmanApp struct and state management.
 
-#![allow(dead_code)]
-
 use eframe::egui;
 use std::collections::HashMap;
 use std::time::Instant;
-use zeroize::Zeroizing;
+use zeroize::{Zeroizing, Zeroize};
 
-use crate::model::{Entry, Vault};
-use crate::vault::{VaultManager, SecurityManager};
+use crate::core::model::{Entry, Vault};
+use crate::security::vault::VaultManager;
+use crate::security::session::SessionManager;
 use crate::utils::generate_password;
-use crate::health::PasswordHealthAnalyzer;
-use crate::secure_clipboard::SecureClipboard;
-use crate::config::get_config;
+use crate::utils::health::PasswordHealthAnalyzer;
+use crate::security::clipboard::SecureClipboard;
+use crate::core::config::get_config;
 
 use super::types::*;
 use super::theme;
@@ -31,7 +30,7 @@ pub struct PassmanApp {
     pub master_password: Zeroizing<String>,
     
     // Security state
-    pub security_manager: SecurityManager,
+    pub security_manager: SessionManager,
     pub secure_clipboard: SecureClipboard,
     pub last_activity: Option<Instant>,
     pub lock_timeout_secs: u64,
@@ -115,7 +114,7 @@ impl Default for PassmanApp {
             vault: None,
             vault_file: String::new(),
             master_password: Zeroizing::new(String::new()),
-            security_manager: SecurityManager::new(),
+            security_manager: SessionManager::new(),
             secure_clipboard: SecureClipboard::new(),
             last_activity: None,
             lock_timeout_secs: 0,
@@ -208,11 +207,6 @@ impl PassmanApp {
         self.add_toast(message, ToastType::Info);
     }
     
-    #[allow(dead_code)]
-    pub fn toast_warning(&mut self, message: impl Into<String>) {
-        self.add_toast(message, ToastType::Warning);
-    }
-    
     fn cleanup_toasts(&mut self) {
         self.toasts.retain(|t| !t.is_expired());
     }
@@ -233,20 +227,6 @@ impl PassmanApp {
     
     pub fn show_field_error(&self, ui: &mut egui::Ui, field: &str) {
         widgets::show_field_error(ui, &self.form_errors, field);
-    }
-    
-    // === Loading Methods ===
-    
-    #[allow(dead_code)]
-    pub fn start_loading(&mut self, message: impl Into<String>) {
-        self.is_loading = true;
-        self.loading_message = message.into();
-    }
-    
-    #[allow(dead_code)]
-    pub fn stop_loading(&mut self) {
-        self.is_loading = false;
-        self.loading_message.clear();
     }
     
     // === Validation Methods ===
@@ -302,6 +282,9 @@ impl PassmanApp {
         self.show_password.clear();
         self.last_activity = None;
         self.current_screen = Screen::Welcome;
+        // Zeroize sensitive form fields
+        self.add_password.zeroize();
+        self.edit_password.zeroize();
         let _ = self.secure_clipboard.clear_now();
     }
     
@@ -450,7 +433,7 @@ impl PassmanApp {
     pub fn clear_add_form(&mut self) {
         self.add_id.clear();
         self.add_username.clear();
-        self.add_password.clear();
+        self.add_password.zeroize();
         self.add_note.clear();
         self.generate_password = false;
         self.add_show_password = false;
@@ -523,7 +506,7 @@ impl PassmanApp {
     pub fn clear_edit_form(&mut self) {
         self.edit_id.clear();
         self.edit_username.clear();
-        self.edit_password.clear();
+        self.edit_password.zeroize();
         self.edit_note.clear();
         self.edit_generate_password = false;
         self.edit_show_password = false;

@@ -3,8 +3,8 @@
 //! Data import and export functionality with native file dialogs.
 
 use eframe::egui;
-use crate::vault::VaultManager;
-use crate::import_export::ImportExportManager;
+use crate::security::vault::VaultManager;
+use crate::utils::import_export::ImportExportManager;
 use super::super::types::{Screen, ExportFormat, ImportFormat, SPACING};
 use super::super::theme;
 use super::super::app::PassmanApp;

@@ -1,51 +1,89 @@
-use std::io::{self, Write};
-use std::fs::File;
-use std::path::Path;
-use clipboard::{ClipboardProvider, ClipboardContext};
+//! Utility Functions
+//!
+//! Provides password generation (random, configurable, memorable), password
+//! strength analysis, clipboard helpers, and basic I/O helpers.
+
+use std::io::{self, IsTerminal, Write};
+use std::sync::LazyLock;
+
+use clipboard::{ClipboardContext, ClipboardProvider};
 use regex::Regex;
 use zeroize::Zeroizing;
 
+use crate::error::PassmanResult;
+
+// ---------------------------------------------------------------------------
+// Password generation configuration
+// ---------------------------------------------------------------------------
+
+/// Configuration for random password generation.
+///
+/// Named `PasswordGenConfig` to avoid collision with
+/// [`crate::config::PasswordConfig`] (application-level password settings).
 #[derive(Debug, Clone)]
-pub struct PasswordConfig {
+pub struct PasswordGenConfig {
     pub include_uppercase: bool,
     pub include_lowercase: bool,
     pub include_numbers: bool,
     pub include_symbols: bool,
-    pub exclude_ambiguous: bool, // 0, O, l, I, etc.
+    /// Exclude visually ambiguous characters: `0 O l I 1`.
+    pub exclude_ambiguous: bool,
 }
 
-/// Copy text to clipboard with proper error handling
-pub fn copy_to_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let mut ctx: ClipboardContext = ClipboardProvider::new()?;
-    ctx.set_contents(text.to_owned())?;
+impl Default for PasswordGenConfig {
+    fn default() -> Self {
+        Self {
+            include_uppercase: true,
+            include_lowercase: true,
+            include_numbers: true,
+            include_symbols: true,
+            exclude_ambiguous: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Clipboard helpers
+// ---------------------------------------------------------------------------
+
+/// Copy text to the system clipboard.
+pub fn copy_to_clipboard(text: &str) -> PassmanResult<()> {
+    let mut ctx: ClipboardContext = ClipboardProvider::new()
+        .map_err(|e| format!("clipboard init failed: {}", e))?;
+    ctx.set_contents(text.to_owned())
+        .map_err(|e| format!("clipboard set failed: {}", e))?;
     println!("✓ Copied to clipboard");
     Ok(())
 }
 
-/// Read password securely from stdin
-pub fn read_password_secure(prompt: &str) -> Result<Zeroizing<String>, Box<dyn std::error::Error>> {
+// ---------------------------------------------------------------------------
+// I/O helpers
+// ---------------------------------------------------------------------------
+
+/// Read a password securely from stdin (hides input in interactive mode).
+pub fn read_password_secure(prompt: &str) -> PassmanResult<Zeroizing<String>> {
     print!("{}", prompt);
     io::stdout().flush()?;
-    
-    // Check if stdin is from a terminal (interactive) or piped
-    let password = if atty::is(atty::Stream::Stdin) {
-        // Interactive mode - use secure password reading
-        Zeroizing::new(rpassword::read_password()?)
+
+    let password = if std::io::stdin().is_terminal() {
+        Zeroizing::new(
+            rpassword::read_password()
+                .map_err(|e| format!("failed to read password: {}", e))?,
+        )
     } else {
-        // Non-interactive mode (piped input) - read normally
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         Zeroizing::new(input.trim().to_string())
     };
-    
+
     if password.trim().is_empty() {
         return Err("Password cannot be empty".into());
     }
     Ok(password)
 }
 
-/// Read line from stdin with validation
-pub fn read_line(prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
+/// Read a non-empty line from stdin, re-prompting on empty input.
+pub fn read_line(prompt: &str) -> PassmanResult<String> {
     loop {
         print!("{}", prompt);
         io::stdout().flush()?;
@@ -59,49 +97,29 @@ pub fn read_line(prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
     }
 }
 
-/// Check if file exists
-#[allow(dead_code)]
-pub fn file_exists(path: &str) -> bool {
-    Path::new(path).exists()
-}
-
-/// Create file if it doesn't exist
-#[allow(dead_code)]
-pub fn ensure_file_exists(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if !file_exists(path) {
-        File::create(path)?;
-    }
-    Ok(())
-}
-
-/// Read entire file as bytes
-#[allow(dead_code)]
-pub fn read_file_bytes(path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    Ok(std::fs::read(path)?)
-}
-
-/// Write bytes to file
-#[allow(dead_code)]
-pub fn write_file_bytes(path: &str, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
-    std::fs::write(path, data)?;
-    Ok(())
-}
-
-/// Read line from stdin with optional input
-pub fn read_line_optional(prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
+/// Read a line from stdin (empty input is allowed).
+pub fn read_line_optional(prompt: &str) -> PassmanResult<String> {
     print!("{}", prompt);
     io::stdout().flush()?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     Ok(input.trim().to_string())
 }
+
+// ---------------------------------------------------------------------------
+// Password generation
+// ---------------------------------------------------------------------------
+
+/// Generate a random password of the given length using the full charset
+/// (upper + lower + digits + symbols).
 pub fn generate_password(length: usize) -> String {
     use rand::Rng;
+
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
-                            abcdefghijklmnopqrstuvwxyz\
-                            0123456789\
-                            !@#$%^&*()_+-=[]{}|;:,.<>?";
-    
+                              abcdefghijklmnopqrstuvwxyz\
+                              0123456789\
+                              !@#$%^&*()_+-=[]{}|;:,.<>?";
+
     let mut rng = rand::thread_rng();
     (0..length)
         .map(|_| {
@@ -111,100 +129,16 @@ pub fn generate_password(length: usize) -> String {
         .collect()
 }
 
-/// Password strength levels
-#[derive(Debug, PartialEq, Clone)]
-pub enum PasswordStrength {
-    VeryWeak,
-    Weak,
-    Fair,
-    Good,
-    Strong,
-}
-
-impl std::fmt::Display for PasswordStrength {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PasswordStrength::VeryWeak => write!(f, "Very Weak"),
-            PasswordStrength::Weak => write!(f, "Weak"),
-            PasswordStrength::Fair => write!(f, "Fair"),
-            PasswordStrength::Good => write!(f, "Good"),
-            PasswordStrength::Strong => write!(f, "Strong"),
-        }
-    }
-}
-
-/// Analyze password strength
-pub fn analyze_password_strength(password: &str) -> (PasswordStrength, Vec<String>) {
-    let mut score = 0;
-    let mut suggestions = Vec::new();
-    
-    // Length check
-    if password.len() >= 8 {
-        score += 1;
-    } else {
-        suggestions.push("Use at least 8 characters".to_string());
-    }
-    
-    if password.len() >= 12 {
-        score += 1;
-    } else if password.len() >= 8 {
-        suggestions.push("Consider using 12+ characters for better security".to_string());
-    }
-    
-    // Character type checks
-    let has_lowercase = Regex::new(r"[a-z]").unwrap().is_match(password);
-    let has_uppercase = Regex::new(r"[A-Z]").unwrap().is_match(password);
-    let has_numbers = Regex::new(r"\d").unwrap().is_match(password);
-    let has_symbols = Regex::new(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]").unwrap().is_match(password);
-    
-    if has_lowercase { score += 1; } else { suggestions.push("Add lowercase letters".to_string()); }
-    if has_uppercase { score += 1; } else { suggestions.push("Add uppercase letters".to_string()); }
-    if has_numbers { score += 1; } else { suggestions.push("Add numbers".to_string()); }
-    if has_symbols { score += 1; } else { suggestions.push("Add special characters".to_string()); }
-      // Check for repeated characters (simple approach)
-    let mut has_repeated = false;
-    let chars: Vec<char> = password.chars().collect();
-    for i in 0..chars.len().saturating_sub(2) {
-        if chars[i] == chars[i + 1] && chars[i + 1] == chars[i + 2] {
-            has_repeated = true;
-            break;
-        }
-    }
-    
-    if has_repeated {
-        score -= 1;
-        suggestions.push("Avoid repeating characters".to_string());
-    }
-    
-    if Regex::new(r"(012|123|234|345|456|567|678|789|890|abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)").unwrap().is_match(&password.to_lowercase()) {
-        score -= 1;
-        suggestions.push("Avoid sequential characters".to_string());
-    }
-    
-    // Common passwords check
-    let common_passwords = ["password", "123456", "password123", "admin", "qwerty", "letmein"];
-    if common_passwords.iter().any(|&p| password.to_lowercase().contains(p)) {
-        score -= 2;
-        suggestions.push("Avoid common passwords".to_string());
-    }
-    
-    let strength = match score {
-        s if s <= 1 => PasswordStrength::VeryWeak,
-        2 => PasswordStrength::Weak,
-        3 => PasswordStrength::Fair,
-        4 => PasswordStrength::Good,
-        _ => PasswordStrength::Strong,
-    };
-    
-    (strength, suggestions)
-}
-
-#[allow(dead_code)]
-pub fn generate_password_with_config(length: usize, config: &PasswordConfig) -> String {
+/// Generate a random password respecting the given [`PasswordGenConfig`].
+///
+/// Guarantees at least one character of each enabled category (when the
+/// requested length permits) and shuffles the result.
+pub fn generate_password_with_config(length: usize, config: &PasswordGenConfig) -> String {
+    use rand::seq::SliceRandom;
     use rand::Rng;
-    
-    let mut charset = Vec::new();
-    
+
+    let mut charset = Vec::with_capacity(94); // ASCII printable max
+
     if config.include_lowercase {
         charset.extend_from_slice(b"abcdefghijklmnopqrstuvwxyz");
     }
@@ -217,95 +151,222 @@ pub fn generate_password_with_config(length: usize, config: &PasswordConfig) -> 
     if config.include_symbols {
         charset.extend_from_slice(b"!@#$%^&*()_+-=[]{}|;:,.<>?");
     }
-    
-    // Remove ambiguous characters if requested
+
     if config.exclude_ambiguous {
         charset.retain(|&c| !b"0O1lI".contains(&c));
     }
-    
+
     if charset.is_empty() {
         charset.extend_from_slice(b"abcdefghijklmnopqrstuvwxyz"); // fallback
     }
-    
+
     let mut rng = rand::thread_rng();
-    let mut password = Vec::new();
-    
-    // Ensure at least one character from each enabled set
+    let mut password = Vec::with_capacity(length);
+
+    // Seed one character from each enabled category
     if config.include_lowercase && length > 0 {
-        let lowercase: Vec<u8> = b"abcdefghijklmnopqrstuvwxyz".iter()
+        let set: Vec<u8> = b"abcdefghijklmnopqrstuvwxyz"
+            .iter()
             .filter(|&&c| !config.exclude_ambiguous || !b"l".contains(&c))
-            .copied().collect();
-        if !lowercase.is_empty() {
-            password.push(lowercase[rng.gen_range(0..lowercase.len())]);
+            .copied()
+            .collect();
+        if !set.is_empty() {
+            password.push(set[rng.gen_range(0..set.len())]);
         }
     }
-    
-    if config.include_uppercase && length > 1 {
-        let uppercase: Vec<u8> = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ".iter()
+    if config.include_uppercase && password.len() < length {
+        let set: Vec<u8> = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            .iter()
             .filter(|&&c| !config.exclude_ambiguous || !b"OI".contains(&c))
-            .copied().collect();
-        if !uppercase.is_empty() {
-            password.push(uppercase[rng.gen_range(0..uppercase.len())]);
+            .copied()
+            .collect();
+        if !set.is_empty() {
+            password.push(set[rng.gen_range(0..set.len())]);
         }
     }
-    
-    if config.include_numbers && length > 2 {
-        let numbers: Vec<u8> = b"0123456789".iter()
+    if config.include_numbers && password.len() < length {
+        let set: Vec<u8> = b"0123456789"
+            .iter()
             .filter(|&&c| !config.exclude_ambiguous || !b"01".contains(&c))
-            .copied().collect();
-        if !numbers.is_empty() {
-            password.push(numbers[rng.gen_range(0..numbers.len())]);
+            .copied()
+            .collect();
+        if !set.is_empty() {
+            password.push(set[rng.gen_range(0..set.len())]);
         }
     }
-    
-    if config.include_symbols && length > 3 {
+    if config.include_symbols && password.len() < length {
         password.push(b"!@#$%^&*"[rng.gen_range(0..8)]);
     }
-    
-    // Fill remaining length
+
+    // Fill remaining length from the combined charset
     while password.len() < length {
         password.push(charset[rng.gen_range(0..charset.len())]);
     }
-    
-    // Shuffle the password to avoid predictable patterns
-    use rand::seq::SliceRandom;
+
     password.shuffle(&mut rng);
-    
-    String::from_utf8(password).unwrap_or_else(|_| "password123".to_string())
+
+    String::from_utf8(password).expect("BUG: password generator produced invalid UTF-8 from ASCII charset")
 }
 
-// Generate memorable password (diceware-style)
+/// Word list for memorable (diceware-style) password generation.
+const MEMORABLE_WORDS: &[&str] = &[
+    "apple", "brave", "cloud", "dream", "eagle", "flame", "grace", "heart",
+    "ivory", "jewel", "knight", "lemon", "magic", "noble", "ocean", "peace",
+    "quiet", "river", "stone", "tiger", "unity", "voice", "water", "xenon",
+    "youth", "zebra", "anchor", "bridge", "castle", "dragon", "empire", "forest",
+    "galaxy", "harbor", "island", "jungle", "lantern", "marble", "nebula", "orchid",
+    "palace", "quartz", "rainbow", "silver", "tornado", "umbrella", "valley", "winter",
+];
+
+/// Generate a memorable password by concatenating `word_count` random
+/// capitalized words from a curated word list.
 pub fn generate_memorable_password(word_count: usize) -> String {
-    const WORDS: &[&str] = &[
-        "apple", "brave", "cloud", "dream", "eagle", "flame", "grace", "heart",
-        "ivory", "jewel", "knight", "lemon", "magic", "noble", "ocean", "peace",
-        "quiet", "river", "stone", "tiger", "unity", "voice", "water", "xenon",
-        "youth", "zebra", "anchor", "bridge", "castle", "dragon", "empire", "forest"
-    ];
-    
     use rand::seq::SliceRandom;
+
     let mut rng = rand::thread_rng();
-    
+
     (0..word_count)
-        .map(|_| WORDS.choose(&mut rng).unwrap_or(&"word"))
+        .map(|_| MEMORABLE_WORDS.choose(&mut rng).unwrap_or(&"word"))
         .map(|word| {
-            let mut word = word.to_string();
-            // Capitalize first letter
-            if let Some(first_char) = word.chars().next() {
-                word.replace_range(0..first_char.len_utf8(), &first_char.to_uppercase().to_string());
+            let mut w = word.to_string();
+            if let Some(first) = w.chars().next() {
+                w.replace_range(0..first.len_utf8(), &first.to_uppercase().to_string());
             }
-            word
+            w
         })
         .collect::<Vec<_>>()
         .join("")
 }
+
+// ---------------------------------------------------------------------------
+// Password strength analysis
+// ---------------------------------------------------------------------------
+
+/// Password strength levels.
+#[derive(Debug, PartialEq, Clone)]
+pub enum PasswordStrength {
+    VeryWeak,
+    Weak,
+    Fair,
+    Good,
+    Strong,
+}
+
+impl std::fmt::Display for PasswordStrength {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::VeryWeak => write!(f, "Very Weak"),
+            Self::Weak => write!(f, "Weak"),
+            Self::Fair => write!(f, "Fair"),
+            Self::Good => write!(f, "Good"),
+            Self::Strong => write!(f, "Strong"),
+        }
+    }
+}
+
+/// Top-100 common passwords (truncated — full list would use a crate like
+/// `zxcvbn`). Passwords that appear in this list incur a heavy penalty.
+static COMMON_PASSWORDS: &[&str] = &[
+    "password", "123456", "12345678", "password1", "password123",
+    "admin", "qwerty", "letmein", "welcome", "monkey",
+    "master", "dragon", "login", "princess", "football",
+    "shadow", "sunshine", "trustno1", "iloveyou", "batman",
+    "access", "hello", "charlie", "123456789", "1234567",
+    "abc123", "654321", "michael", "jordan", "superman",
+    "harley", "robert", "daniel", "matthew", "summer",
+    "george", "jennifer", "hunter", "amanda", "michelle",
+    "thomas", "andrew", "andrea", "joshua", "james",
+    "nicole", "jessica", "freedom", "liverpool", "soccer",
+    "passw0rd", "starwars", "ginger", "killer", "pepper",
+    "ranger", "buster", "hockey", "zaq1zaq1", "mustang",
+    "bailey", "nothing", "flower", "12345", "111111",
+    "tigger", "joshua", "cookie", "richard", "dallas",
+    "test", "test123", "pa$$word", "qwerty123", "asdf",
+    "zxcvbnm", "q1w2e3r4", "1q2w3e4r", "1qaz2wsx", "pass",
+    "changeme", "default", "root", "toor", "guest",
+    "administrator", "p@ssw0rd", "p@ssword", "baseball", "basketball",
+    "solo", "ashley", "thunder", "maggie", "oliver",
+    "silver", "corvette", "diamond", "secret", "computer",
+];
+
+/// Analyze the strength of a password and return actionable suggestions.
+pub fn analyze_password_strength(password: &str) -> (PasswordStrength, Vec<String>) {
+    let mut score: i32 = 0;
+    let mut suggestions = Vec::new();
+
+    // --- Length ---
+    if password.len() >= 8 {
+        score += 1;
+    } else {
+        suggestions.push("Use at least 8 characters".to_string());
+    }
+    if password.len() >= 12 {
+        score += 1;
+    } else if password.len() >= 8 {
+        suggestions.push("Consider using 12+ characters for better security".to_string());
+    }
+
+    // --- Character variety ---
+    let has_lowercase = password.chars().any(|c| c.is_ascii_lowercase());
+    let has_uppercase = password.chars().any(|c| c.is_ascii_uppercase());
+    let has_numbers = password.chars().any(|c| c.is_ascii_digit());
+    let has_symbols = password.chars().any(|c| !c.is_alphanumeric() && c.is_ascii());
+
+    if has_lowercase { score += 1; } else { suggestions.push("Add lowercase letters".into()); }
+    if has_uppercase { score += 1; } else { suggestions.push("Add uppercase letters".into()); }
+    if has_numbers { score += 1; } else { suggestions.push("Add numbers".into()); }
+    if has_symbols { score += 1; } else { suggestions.push("Add special characters".into()); }
+
+    // --- Repeated characters (e.g. "aaa") ---
+    let chars: Vec<char> = password.chars().collect();
+    let has_repeated = chars
+        .windows(3)
+        .any(|w| w[0] == w[1] && w[1] == w[2]);
+    if has_repeated {
+        score -= 1;
+        suggestions.push("Avoid repeating characters".into());
+    }
+
+    // --- Sequential patterns ---
+    static SEQ_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?i)(012|123|234|345|456|567|678|789|890|abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)",
+        )
+        .unwrap()
+    });
+    if SEQ_RE.is_match(password) {
+        score -= 1;
+        suggestions.push("Avoid sequential characters".into());
+    }
+
+    // --- Common passwords ---
+    let lower = password.to_lowercase();
+    if COMMON_PASSWORDS.iter().any(|&p| lower.contains(p)) {
+        score -= 2;
+        suggestions.push("Avoid common passwords".into());
+    }
+
+    let strength = match score {
+        s if s <= 1 => PasswordStrength::VeryWeak,
+        2 => PasswordStrength::Weak,
+        3 => PasswordStrength::Fair,
+        4 => PasswordStrength::Good,
+        _ => PasswordStrength::Strong,
+    };
+
+    (strength, suggestions)
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     // ============ Password Generation Tests ============
-    
+
     #[test]
     fn test_generate_password_length() {
         for length in [8, 12, 16, 20, 32, 64] {
@@ -323,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_generate_password_with_config_lowercase_only() {
-        let config = PasswordConfig {
+        let config = PasswordGenConfig {
             include_lowercase: true,
             include_uppercase: false,
             include_numbers: false,
@@ -331,13 +392,16 @@ mod tests {
             exclude_ambiguous: false,
         };
         let password = generate_password_with_config(20, &config);
-        assert!(password.chars().all(|c| c.is_ascii_lowercase()),
-            "Password should contain only lowercase: {}", password);
+        assert!(
+            password.chars().all(|c| c.is_ascii_lowercase()),
+            "Password should contain only lowercase: {}",
+            password
+        );
     }
 
     #[test]
     fn test_generate_password_with_config_uppercase_only() {
-        let config = PasswordConfig {
+        let config = PasswordGenConfig {
             include_lowercase: false,
             include_uppercase: true,
             include_numbers: false,
@@ -345,13 +409,16 @@ mod tests {
             exclude_ambiguous: false,
         };
         let password = generate_password_with_config(20, &config);
-        assert!(password.chars().all(|c| c.is_ascii_uppercase()),
-            "Password should contain only uppercase: {}", password);
+        assert!(
+            password.chars().all(|c| c.is_ascii_uppercase()),
+            "Password should contain only uppercase: {}",
+            password
+        );
     }
 
     #[test]
     fn test_generate_password_with_config_numbers_only() {
-        let config = PasswordConfig {
+        let config = PasswordGenConfig {
             include_lowercase: false,
             include_uppercase: false,
             include_numbers: true,
@@ -359,13 +426,16 @@ mod tests {
             exclude_ambiguous: false,
         };
         let password = generate_password_with_config(20, &config);
-        assert!(password.chars().all(|c| c.is_ascii_digit()),
-            "Password should contain only numbers: {}", password);
+        assert!(
+            password.chars().all(|c| c.is_ascii_digit()),
+            "Password should contain only numbers: {}",
+            password
+        );
     }
 
     #[test]
     fn test_generate_password_with_config_exclude_ambiguous() {
-        let config = PasswordConfig {
+        let config = PasswordGenConfig {
             include_lowercase: true,
             include_uppercase: true,
             include_numbers: true,
@@ -373,26 +443,27 @@ mod tests {
             exclude_ambiguous: true,
         };
         let ambiguous_chars = ['0', 'O', '1', 'l', 'I'];
-        
-        // Generate multiple passwords to ensure ambiguous chars are excluded
+
         for _ in 0..50 {
             let password = generate_password_with_config(32, &config);
-            assert!(!password.chars().any(|c| ambiguous_chars.contains(&c)),
-                "Password should not contain ambiguous chars: {}", password);
+            assert!(
+                !password.chars().any(|c| ambiguous_chars.contains(&c)),
+                "Password should not contain ambiguous chars: {}",
+                password
+            );
         }
     }
 
     #[test]
     fn test_generate_password_with_config_all_types() {
-        let config = PasswordConfig {
+        let config = PasswordGenConfig {
             include_lowercase: true,
             include_uppercase: true,
             include_numbers: true,
             include_symbols: true,
             exclude_ambiguous: false,
         };
-        
-        // Generate several passwords to check they contain all types
+
         let password = generate_password_with_config(32, &config);
         assert!(password.chars().any(|c| c.is_ascii_lowercase()), "Should have lowercase");
         assert!(password.chars().any(|c| c.is_ascii_uppercase()), "Should have uppercase");
@@ -402,7 +473,7 @@ mod tests {
 
     #[test]
     fn test_generate_password_empty_config_fallback() {
-        let config = PasswordConfig {
+        let config = PasswordGenConfig {
             include_lowercase: false,
             include_uppercase: false,
             include_numbers: false,
@@ -418,7 +489,6 @@ mod tests {
     #[test]
     fn test_generate_memorable_password_word_count() {
         let password = generate_memorable_password(4);
-        // Each word is capitalized, so count capital letters
         let capital_count = password.chars().filter(|c| c.is_uppercase()).count();
         assert_eq!(capital_count, 4, "Should have 4 capitalized words");
     }
@@ -433,9 +503,11 @@ mod tests {
     #[test]
     fn test_generate_memorable_password_readable() {
         let password = generate_memorable_password(3);
-        // Should only contain alphabetic characters (no numbers/symbols)
-        assert!(password.chars().all(|c| c.is_alphabetic()),
-            "Memorable password should be alphabetic: {}", password);
+        assert!(
+            password.chars().all(|c| c.is_alphabetic()),
+            "Memorable password should be alphabetic: {}",
+            password
+        );
     }
 
     // ============ Password Strength Tests ============
@@ -449,8 +521,11 @@ mod tests {
     #[test]
     fn test_password_strength_weak() {
         let (strength, _) = analyze_password_strength("password");
-        assert!(matches!(strength, PasswordStrength::VeryWeak | PasswordStrength::Weak),
-            "Common password should be weak: {:?}", strength);
+        assert!(
+            matches!(strength, PasswordStrength::VeryWeak | PasswordStrength::Weak),
+            "Common password should be weak: {:?}",
+            strength
+        );
     }
 
     #[test]
@@ -476,8 +551,11 @@ mod tests {
     fn test_password_strength_strong() {
         let (strength, suggestions) = analyze_password_strength("Kj9$mP2!qR5@nL8*");
         assert_eq!(strength, PasswordStrength::Strong);
-        assert!(suggestions.is_empty() || suggestions.len() <= 1,
-            "Strong password should have few suggestions: {:?}", suggestions);
+        assert!(
+            suggestions.is_empty() || suggestions.len() <= 1,
+            "Strong password should have few suggestions: {:?}",
+            suggestions
+        );
     }
 
     #[test]
@@ -494,29 +572,11 @@ mod tests {
         assert!(suggestions.iter().any(|s| s.contains("8 characters")));
     }
 
-    // ============ File Utility Tests ============
+    // ============ Config Tests ============
 
     #[test]
-    fn test_file_exists_nonexistent() {
-        assert!(!file_exists("/nonexistent/path/to/file.txt"));
-    }
-
-    #[test]
-    fn test_file_exists_current_file() {
-        // This test file should exist
-        assert!(file_exists("Cargo.toml"));
-    }
-
-    #[test]
-    fn test_password_config_default_values() {
-        let config = PasswordConfig {
-            include_uppercase: true,
-            include_lowercase: true,
-            include_numbers: true,
-            include_symbols: true,
-            exclude_ambiguous: false,
-        };
-        
+    fn test_password_gen_config_default() {
+        let config = PasswordGenConfig::default();
         assert!(config.include_uppercase);
         assert!(config.include_lowercase);
         assert!(config.include_numbers);

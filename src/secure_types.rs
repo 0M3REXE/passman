@@ -8,47 +8,16 @@
 //!
 //! This module centralizes all sensitive data handling for consistent security.
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // Re-export commonly used types from secrecy
 pub use secrecy::{ExposeSecret, SecretString};
 #[allow(unused_imports)]
 pub use secrecy::SecretBox;
-pub use secrecy::zeroize::Zeroizing;
+#[cfg(test)]
+use secrecy::zeroize::Zeroizing;
 #[allow(unused_imports)]
 pub use secrecy::zeroize::Zeroize;
-
-/// A password that is automatically zeroized when dropped.
-/// 
-/// This type:
-/// - Prevents accidental logging (Debug shows [REDACTED])
-/// - Automatically clears memory when dropped
-/// - Requires explicit `.expose_secret()` to access the value
-/// 
-/// # Example
-/// ```rust
-/// use crate::secure_types::SecurePassword;
-/// 
-/// let password = SecurePassword::new("my_secret_password");
-/// // Access requires explicit call
-/// let value = password.expose_secret();
-/// ```
-pub type SecurePassword = SecretString;
-
-/// A TOTP secret that is automatically zeroized when dropped.
-pub type SecureTotpSecret = SecretString;
-
-/// Create a new SecretString from a String
-pub fn secure_string(s: String) -> SecretString {
-    SecretString::from(s)
-}
-
-/// Create a new SecretString from a &str
-pub fn secure_str(s: &str) -> SecretString {
-    SecretString::from(s.to_string())
-}
 
 /// Wrapper for Option<SecretString> that supports serde
 #[derive(Clone)]
@@ -192,12 +161,14 @@ impl<'de> Deserialize<'de> for SerializableSecret {
 }
 
 /// Convert Zeroizing<String> to SecretString
+#[cfg(test)]
 pub fn zeroizing_to_secret(z: Zeroizing<String>) -> SecretString {
     // Take the value out (will zeroize the Zeroizing wrapper on drop)
     SecretString::from(z.to_string())
 }
 
 /// Convert SecretString to Zeroizing<String> for compatibility
+#[cfg(test)]
 pub fn secret_to_zeroizing(s: &SecretString) -> Zeroizing<String> {
     Zeroizing::new(s.expose_secret().to_string())
 }
@@ -208,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_secure_string_debug_redacted() {
-        let secret = secure_str("my_password");
+        let secret = SecretString::from("my_password".to_string());
         let debug_output = format!("{:?}", secret);
         assert!(!debug_output.contains("my_password"));
         assert!(debug_output.contains("REDACTED") || debug_output.contains("Secret"));

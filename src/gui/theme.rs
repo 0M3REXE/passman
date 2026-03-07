@@ -2,8 +2,6 @@
 //!
 //! Handles application theming and visual styling.
 
-#![allow(dead_code)]
-
 use eframe::egui;
 use super::types::{Theme, SPACING};
 
@@ -53,19 +51,9 @@ pub fn frame_fill(_theme: &Theme) -> egui::Color32 {
     egui::Color32::from_rgb(40, 42, 46)
 }
 
-/// Get card hover color
-pub fn card_hover_fill(_theme: &Theme) -> egui::Color32 {
-    egui::Color32::from_rgb(50, 52, 58)
-}
-
 /// Get subtle border color
 pub fn border_color(_theme: &Theme) -> egui::Color32 {
     egui::Color32::from_rgb(60, 63, 68)
-}
-
-/// Get accent border color (for focused/active elements)
-pub fn accent_border_color(_theme: &Theme) -> egui::Color32 {
-    egui::Color32::from_rgb(70, 130, 180)
 }
 
 /// Get muted text color
@@ -81,26 +69,4 @@ pub fn header_bg_color(_theme: &Theme) -> egui::Color32 {
 /// Get search bar background color  
 pub fn search_bg_color(_theme: &Theme) -> egui::Color32 {
     egui::Color32::from_rgb(45, 47, 52)
-}
-
-/// Password strength colors
-pub struct StrengthColors;
-
-impl StrengthColors {
-    pub fn very_weak() -> egui::Color32 { egui::Color32::from_rgb(220, 53, 69) }
-    pub fn weak() -> egui::Color32 { egui::Color32::from_rgb(255, 140, 0) }
-    pub fn fair() -> egui::Color32 { egui::Color32::from_rgb(255, 193, 7) }
-    pub fn good() -> egui::Color32 { egui::Color32::from_rgb(40, 167, 69) }
-    pub fn strong() -> egui::Color32 { egui::Color32::from_rgb(0, 200, 83) }
-    
-    /// Get color and label based on score (0-100)
-    pub fn from_score(score: u32) -> (egui::Color32, &'static str) {
-        match score {
-            0..=25 => (Self::very_weak(), "Very Weak"),
-            26..=50 => (Self::weak(), "Weak"),
-            51..=70 => (Self::fair(), "Fair"),
-            71..=85 => (Self::good(), "Good"),
-            _ => (Self::strong(), "Strong"),
-        }
-    }
 }

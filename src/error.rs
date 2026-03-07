@@ -1,9 +1,8 @@
 //! Unified Error Handling Module
-//! 
-//! Provides typed errors for the password manager application
-//! with user-friendly error messages.
-
-#![allow(dead_code)]
+//!
+//! Provides a typed error hierarchy for the password manager application
+//! with user-friendly display messages and automatic conversion from
+//! underlying library errors.
 
 use std::fmt;
 use std::io;
@@ -310,19 +309,35 @@ impl From<Box<dyn std::error::Error>> for PassmanError {
     }
 }
 
-/// Result type alias for Passman operations
-pub type PassmanResult<T> = Result<T, PassmanError>;
-
-/// Helper trait for adding context to errors
-pub trait ResultExt<T> {
-    fn context(self, msg: &str) -> PassmanResult<T>;
-}
-
-impl<T, E: Into<PassmanError>> ResultExt<T> for Result<T, E> {
-    fn context(self, msg: &str) -> PassmanResult<T> {
-        self.map_err(|e| {
-            let err: PassmanError = e.into();
-            PassmanError::Other(format!("{}: {}", msg, err))
-        })
+impl From<serde_json::Error> for PassmanError {
+    fn from(err: serde_json::Error) -> Self {
+        PassmanError::Other(format!("JSON error: {}", err))
     }
 }
+
+impl From<std::str::Utf8Error> for PassmanError {
+    fn from(err: std::str::Utf8Error) -> Self {
+        PassmanError::Other(format!("UTF-8 error: {}", err))
+    }
+}
+
+impl From<csv::Error> for PassmanError {
+    fn from(err: csv::Error) -> Self {
+        PassmanError::Transfer(TransferError::ParseError(err.to_string()))
+    }
+}
+
+impl From<std::array::TryFromSliceError> for PassmanError {
+    fn from(err: std::array::TryFromSliceError) -> Self {
+        PassmanError::Vault(VaultError::Corrupted(err.to_string()))
+    }
+}
+
+impl From<crate::security::crypto::CryptoError> for PassmanError {
+    fn from(err: crate::security::crypto::CryptoError) -> Self {
+        PassmanError::Crypto(CryptoError::Decryption(err.to_string()))
+    }
+}
+
+/// Result type alias for Passman operations
+pub type PassmanResult<T> = Result<T, PassmanError>;

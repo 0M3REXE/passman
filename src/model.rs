@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
-use crate::secure_types::{SerializableSecret, OptionalSecret};
+use crate::security::types::{SerializableSecret, OptionalSecret};
 
 const CURRENT_VERSION: u32 = 1;
 
@@ -84,7 +84,6 @@ impl Entry {
         self.totp_secret.expose_secret()
     }
     
-    #[allow(dead_code)]
     pub fn update(&mut self) {
         self.modified_at = chrono::Utc::now();
     }
@@ -123,7 +122,6 @@ impl Vault {
             },
         }
     }
-      #[allow(dead_code)]
     pub fn update_access_time(&mut self) {
         self.metadata.last_accessed = chrono::Utc::now();
     }

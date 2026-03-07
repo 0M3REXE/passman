@@ -17,7 +17,6 @@ license = false
 eula = false
 
 [dependencies]
-atty = "0.2"
 aes = "0.8"
 aes-gcm = { version = "0.10", features = ["zeroize"] }
 argon2 = "0.5"
@@ -45,7 +44,7 @@ zeroize = { version = "1.6", features = ["derive"] }
 qr_code = "2.0"
 totp-rs = "5.4"
 uuid = { version = "1.6", features = ["v4"] }
-ansi_term = "0.12"
+
 notify = "6.1"
 toml = "0.8"
 rfd = "0.15"  # Native file dialogs

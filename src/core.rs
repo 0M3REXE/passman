@@ -4,16 +4,15 @@
 //! This module abstracts vault operations, authentication, and common functionality
 //! to ensure consistent behavior across different frontends.
 
-use crate::crypto::{derive_key, Key};
+use crate::security::crypto::Key;
 use crate::model::{Entry, Vault};
-use crate::vault::VaultManager;
+use crate::security::vault::VaultManager;
 use crate::health::{PasswordHealthAnalyzer, PasswordHealth, HealthSummary, HealthReport};
 use crate::import_export::ImportExportManager;
-use crate::utils::{generate_password, generate_password_with_config, generate_memorable_password, analyze_password_strength, PasswordStrength, PasswordConfig};
-use crate::error::{PassmanError, PassmanResult, VaultError, AuthError, CryptoError, TransferError};
+use crate::utils::{generate_password, generate_password_with_config, generate_memorable_password, analyze_password_strength, PasswordStrength, PasswordGenConfig};
+use crate::error::{PassmanError, PassmanResult, VaultError, AuthError, TransferError};
 use crate::config::{Config, get_config};
 
-use argon2::password_hash::SaltString;
 use zeroize::Zeroizing;
 use std::path::Path;
 
@@ -96,8 +95,7 @@ impl PassmanCore {
         // Validate password strength
         self.validate_master_password(master_password)?;
 
-        VaultManager::init(master_password, Some(&self.vault_path))
-            .map_err(|e| PassmanError::Vault(VaultError::WriteError(e.to_string())))?;
+        VaultManager::init(master_password, Some(&self.vault_path))?;
 
         // Auto-login after init
         self.unlock(master_password)?;
@@ -118,22 +116,18 @@ impl PassmanCore {
         }
 
         let vault = VaultManager::load(master_password, Some(&self.vault_path))
-            .map_err(|e| {
-                let msg = e.to_string();
-                if msg.contains("decryption") || msg.contains("authentication") || msg.contains("HMAC") {
+            .map_err(|e| match &e {
+                PassmanError::Crypto(_)
+                | PassmanError::Vault(VaultError::IntegrityFailed) => {
                     PassmanError::Auth(AuthError::InvalidPassword)
-                } else {
-                    PassmanError::Vault(VaultError::ReadError(msg))
                 }
+                _ => e,
             })?;
 
-        // Derive key for future saves
-        let salt = SaltString::generate(&mut rand::thread_rng());
-        let key = derive_key(master_password.as_str(), &salt)
-            .map_err(|e| PassmanError::Crypto(CryptoError::KeyDerivation(e.to_string())))?;
-
         self.vault = Some(vault);
-        self.key = Some(key);
+        // Note: self.key is not used — VaultManager::save() derives the key
+        // from the vault file's salt internally, so no key needs to be cached.
+        self.key = None;
 
         log::info!("Vault unlocked successfully");
         Ok(())
@@ -154,8 +148,7 @@ impl PassmanCore {
         let vault = self.vault.as_ref()
             .ok_or_else(|| PassmanError::Vault(VaultError::ReadError("No vault loaded".to_string())))?;
 
-        VaultManager::save(vault, master_password, Some(&self.vault_path))
-            .map_err(|e| PassmanError::Vault(VaultError::WriteError(e.to_string())))?;
+        VaultManager::save(vault, master_password, Some(&self.vault_path))?;
 
         log::debug!("Vault saved");
         Ok(())
@@ -170,19 +163,19 @@ impl PassmanCore {
         current_password: &Zeroizing<String>,
         new_password: &Zeroizing<String>,
     ) -> PassmanResult<()> {
-        // Verify current password by loading vault
-        let vault = VaultManager::load(current_password, Some(&self.vault_path))
-            .map_err(|_| PassmanError::Auth(AuthError::InvalidPassword))?;
-
         // Validate new password
         self.validate_master_password(new_password)?;
 
-        // Save with new password
-        VaultManager::save(&vault, new_password, Some(&self.vault_path))
-            .map_err(|e| PassmanError::Vault(VaultError::WriteError(e.to_string())))?;
+        // VaultManager::change_password performs exactly 2 Argon2 derivations:
+        //   1. Load vault with old password
+        //   2. Re-encrypt with new salt + password
+        VaultManager::change_password(current_password, new_password, Some(&self.vault_path))?;
 
-        // Update internal state
-        self.vault = Some(vault);
+        // The vault data itself hasn't changed — only the on-disk encryption.
+        // If we already have the vault in memory, keep it; otherwise load once.
+        if self.vault.is_none() {
+            self.unlock(new_password)?;
+        }
 
         log::info!("Master password changed successfully");
         Ok(())
@@ -301,7 +294,7 @@ impl PassmanCore {
     }
 
     /// Generate a random password with custom configuration
-    pub fn generate_password_configured(&self, length: usize, config: &PasswordConfig) -> String {
+    pub fn generate_password_configured(&self, length: usize, config: &PasswordGenConfig) -> String {
         generate_password_with_config(length, config)
     }
 
@@ -380,7 +373,6 @@ impl PassmanCore {
             .ok_or_else(|| PassmanError::Transfer(TransferError::InvalidData("Vault is locked".to_string())))?;
 
         ImportExportManager::export_json(vault, file_path)
-            .map_err(|e| PassmanError::Transfer(TransferError::InvalidData(e.to_string())))
     }
 
     /// Export vault to CSV format (WARNING: plaintext)
@@ -389,13 +381,11 @@ impl PassmanCore {
             .ok_or_else(|| PassmanError::Transfer(TransferError::InvalidData("Vault is locked".to_string())))?;
 
         ImportExportManager::export_csv(vault, file_path)
-            .map_err(|e| PassmanError::Transfer(TransferError::InvalidData(e.to_string())))
     }
 
     /// Import entries from JSON file
     pub fn import_json(&mut self, file_path: &str, master_password: &Zeroizing<String>, merge: bool) -> PassmanResult<()> {
-        ImportExportManager::import_json(file_path, master_password, Some(&self.vault_path), merge)
-            .map_err(|e| PassmanError::Transfer(TransferError::ParseError(e.to_string())))?;
+        ImportExportManager::import_json(file_path, master_password, Some(&self.vault_path), merge)?;
 
         // Reload vault after import
         self.unlock(master_password)?;
@@ -405,8 +395,7 @@ impl PassmanCore {
 
     /// Import entries from CSV file
     pub fn import_csv(&mut self, file_path: &str, master_password: &Zeroizing<String>, merge: bool) -> PassmanResult<()> {
-        ImportExportManager::import_csv(file_path, master_password, Some(&self.vault_path), merge)
-            .map_err(|e| PassmanError::Transfer(TransferError::ParseError(e.to_string())))?;
+        ImportExportManager::import_csv(file_path, master_password, Some(&self.vault_path), merge)?;
 
         // Reload vault after import
         self.unlock(master_password)?;
@@ -417,7 +406,6 @@ impl PassmanCore {
     /// Create a backup of the current vault
     pub fn create_backup(&self) -> PassmanResult<String> {
         VaultManager::create_backup(Some(&self.vault_path))
-            .map_err(|e| PassmanError::Transfer(TransferError::InvalidData(e.to_string())))
     }
 
 

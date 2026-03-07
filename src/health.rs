@@ -14,7 +14,6 @@ pub enum PasswordHealth {
 
 /// Password health analysis result
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct HealthReport {
     pub entry_id: String,
     pub health: PasswordHealth,
@@ -38,26 +37,36 @@ impl PasswordHealthAnalyzer {
 
     /// Create a mock breach database for demonstration
     fn create_mock_breach_database() -> HashMap<String, DateTime<Utc>> {
-        let mut db = HashMap::new();
-        
-        // Common breached passwords
-        let common_passwords = vec![
-            "password123",
-            "admin",
-            "123456",
-            "password",
-            "qwerty",
-            "letmein",
-            "welcome",
-            "monkey",
+        let breach_date = Utc::now() - Duration::days(30);
+
+        // Top 50+ most common breached passwords (sourced from public studies)
+        let common_passwords: &[&str] = &[
+            "123456", "password", "12345678", "qwerty", "123456789",
+            "12345", "1234", "111111", "1234567", "dragon",
+            "123123", "baseball", "abc123", "football", "monkey",
+            "letmein", "shadow", "master", "666666", "qwertyuiop",
+            "123321", "mustang", "1234567890", "michael", "654321",
+            "superman", "1qaz2wsx", "7777777", "121212", "000000",
+            "qazwsx", "123qwe", "killer", "trustno1", "jordan",
+            "jennifer", "zaq1zaq1", "asdfgh", "hunter", "buster",
+            "soccer", "harley", "batman", "andrew", "tigger",
+            "sunshine", "iloveyou", "2000", "charlie", "robert",
+            "thomas", "hockey", "ranger", "daniel", "starwars",
+            "klaster", "112233", "george", "computer", "michelle",
+            "jessica", "pepper", "1111", "zxcvbn", "555555",
+            "11111111", "131313", "freedom", "777777", "pass",
+            "maggie", "159753", "aaaaaa", "ginger", "princess",
+            "joshua", "cheese", "amanda", "summer", "love",
+            "ashley", "nicole", "chelsea", "biteme", "matthew",
+            "access", "yankees", "987654321", "dallas", "austin",
+            "thunder", "taylor", "matrix", "admin", "password123",
+            "welcome", "password1", "admin123", "p@ssw0rd", "passw0rd",
         ];
 
-        let breach_date = Utc::now() - Duration::days(30);
-        for password in common_passwords {
-            db.insert(password.to_string(), breach_date);
-        }
-
-        db
+        common_passwords
+            .iter()
+            .map(|pw| (pw.to_string(), breach_date))
+            .collect()
     }
 
     /// Analyze the health of all passwords in a vault
@@ -205,7 +214,6 @@ impl PasswordHealthAnalyzer {
 
 /// Summary of password health for a vault
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct HealthSummary {
     pub total: usize,
     pub critical: usize,

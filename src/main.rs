@@ -2,39 +2,28 @@
 // Instead, we detach from console when running GUI mode on Windows
 
 mod cli;
-mod crypto;
-mod vault;
-mod model;
+mod security;
+mod core;
 mod utils;
 mod gui;
-mod health;
-mod import_export;
-mod secure_clipboard;
-mod session;
-mod error;
-mod config;
-mod logging;
-mod core;
-mod secure_types;
 
 use eframe::egui;
 use cli::{Cli, Commands, TransferCommands, ConfigCommands};
-use model::Entry;
-use vault::VaultManager;
+use core::model::Entry;
+use security::vault::VaultManager;
 use utils::*;
 use clap::Parser;
-use std::error::Error;
 use zeroize::Zeroizing;
 
 // Re-export commonly used types
-pub use error::{PassmanError, PassmanResult};
-pub use config::Config;
+pub use core::error::{PassmanError, PassmanResult};
+pub use core::config::Config;
 pub use core::{PassmanCore, EntryBuilder};
 
 
 fn main() -> Result<(), eframe::Error> {
     // Initialize logging from config
-    if let Err(e) = logging::init_from_config() {
+    if let Err(e) = utils::logging::init_from_config() {
         eprintln!("Warning: Failed to initialize logging: {}", e);
     }
     log::info!("Passman starting...");
@@ -102,7 +91,7 @@ fn run_cli() {
     }
 }
 
-fn handle_init(vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_init(vault_file: Option<&str>) -> PassmanResult<()> {
     if VaultManager::exists(vault_file) {
         return Err("Vault already exists! Remove vault file to reset.".into());
     }
@@ -123,7 +112,7 @@ fn handle_init(vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn handle_add(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_add(id: &str, vault_file: Option<&str>) -> PassmanResult<()> {
     let master_password = read_password_secure("Enter master password: ")?;
     let mut vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -137,7 +126,8 @@ fn handle_add(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> 
     let password_choice = read_line_optional("Generate password? (y/N): ")?;
     let password = if password_choice.to_lowercase() == "y" || password_choice.to_lowercase() == "yes" {
         let generated = generate_password(16);
-        println!("Generated password: {}", generated);
+        let _ = copy_to_clipboard(&generated);
+        println!("✓ Generated password copied to clipboard ({}chars)", generated.len());
         let (strength, _) = analyze_password_strength(&generated);
         println!("Password strength: {}", strength);
         generated
@@ -165,7 +155,7 @@ fn handle_add(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
-fn handle_get(id: &str, vault_file: Option<&str>, copy: bool, show: bool) -> Result<(), Box<dyn Error>> {
+fn handle_get(id: &str, vault_file: Option<&str>, copy: bool, show: bool) -> PassmanResult<()> {
     let master_password = read_password_secure("Enter master password: ")?;
     let vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -202,7 +192,7 @@ fn handle_get(id: &str, vault_file: Option<&str>, copy: bool, show: bool) -> Res
     Ok(())
 }
 
-fn handle_list(vault_file: Option<&str>, search: Option<&str>, verbose: bool) -> Result<(), Box<dyn Error>> {
+fn handle_list(vault_file: Option<&str>, search: Option<&str>, verbose: bool) -> PassmanResult<()> {
     let master_password = read_password_secure("Enter master password: ")?;
     let vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -267,7 +257,7 @@ fn handle_list(vault_file: Option<&str>, search: Option<&str>, verbose: bool) ->
     Ok(())
 }
 
-fn handle_remove(id: &str, vault_file: Option<&str>, force: bool) -> Result<(), Box<dyn Error>> {
+fn handle_remove(id: &str, vault_file: Option<&str>, force: bool) -> PassmanResult<()> {
     let master_password = read_password_secure("Enter master password: ")?;
     let mut vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -296,7 +286,7 @@ fn handle_remove(id: &str, vault_file: Option<&str>, force: bool) -> Result<(), 
     Ok(())
 }
 
-fn handle_check(password: Option<&str>, all: bool, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_check(password: Option<&str>, all: bool, vault_file: Option<&str>) -> PassmanResult<()> {
     if all {
         // Check all passwords in vault
         let master_password = read_password_secure("Enter master password: ")?;
@@ -359,7 +349,7 @@ fn handle_check(password: Option<&str>, all: bool, vault_file: Option<&str>) -> 
     Ok(())
 }
 
-fn handle_vaults() -> Result<(), Box<dyn Error>> {
+fn handle_vaults() -> PassmanResult<()> {
     use std::fs;
     
     println!("Available vault files:");
@@ -392,7 +382,7 @@ fn handle_vaults() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn handle_edit(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_edit(id: &str, vault_file: Option<&str>) -> PassmanResult<()> {
     let master_password = read_password_secure("Enter master password: ")?;
     let mut vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -429,7 +419,8 @@ fn handle_edit(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>>
             let len_str = read_line_optional("Password length (default 16): ")?;
             let len: usize = len_str.parse().unwrap_or(16);
             let generated = generate_password(len);
-            println!("Generated password: {}", generated);
+            let _ = copy_to_clipboard(&generated);
+            println!("✓ Generated password copied to clipboard ({}chars)", generated.len());
             let (strength, _) = analyze_password_strength(&generated);
             println!("Password strength: {}", strength);
             generated
@@ -458,11 +449,16 @@ fn handle_edit(id: &str, vault_file: Option<&str>) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
-fn handle_generate(length: usize, symbols: bool, no_ambiguous: bool, memorable: bool) -> Result<(), Box<dyn Error>> {
+fn handle_generate(length: usize, symbols: bool, no_ambiguous: bool, memorable: bool) -> PassmanResult<()> {
     let password = if memorable {
         generate_memorable_password(4)
     } else {
-        generate_password_with_options(length, symbols, !no_ambiguous)
+        let config = PasswordGenConfig {
+            include_symbols: symbols,
+            exclude_ambiguous: no_ambiguous,
+            ..PasswordGenConfig::default()
+        };
+        generate_password_with_config(length, &config)
     };
 
     println!("\nGenerated Password: {}", password);
@@ -486,72 +482,8 @@ fn handle_generate(length: usize, symbols: bool, no_ambiguous: bool, memorable: 
     Ok(())
 }
 
-fn generate_password_with_options(length: usize, include_symbols: bool, include_ambiguous: bool) -> String {
-    use rand::seq::SliceRandom;
-    
-    let mut charset: Vec<char> = Vec::new();
-    
-    // Lowercase
-    charset.extend('a'..='z');
-    // Uppercase
-    charset.extend('A'..='Z');
-    // Digits
-    charset.extend('0'..='9');
-    
-    if include_symbols {
-        charset.extend("!@#$%^&*()_+-=[]{}|;:,.<>?".chars());
-    }
-    
-    if !include_ambiguous {
-        // Remove ambiguous characters
-        let ambiguous = ['0', 'O', 'o', '1', 'l', 'I', '|'];
-        charset.retain(|c| !ambiguous.contains(c));
-    }
-    
-    let mut rng = rand::thread_rng();
-    (0..length)
-        .map(|_| *charset.choose(&mut rng).unwrap())
-        .collect()
-}
-
-fn generate_memorable_password(word_count: usize) -> String {
-    use rand::seq::SliceRandom;
-    use rand::Rng;
-    
-    let words = vec![
-        "apple", "banana", "cherry", "dragon", "eagle", "falcon", "garden", "harbor",
-        "island", "jungle", "knight", "lemon", "mountain", "nebula", "ocean", "phoenix",
-        "quartz", "river", "sunset", "thunder", "umbrella", "valley", "winter", "xenon",
-        "yellow", "zenith", "anchor", "bridge", "castle", "diamond", "empire", "forest",
-        "glacier", "horizon", "ivory", "jasmine", "kingdom", "lantern", "marble", "neptune",
-        "orchid", "palace", "quantum", "rainbow", "silver", "tornado", "universe", "volcano",
-    ];
-    
-    let mut rng = rand::thread_rng();
-    let mut result = Vec::new();
-    
-    for _ in 0..word_count {
-        let word = words.choose(&mut rng).unwrap();
-        // Capitalize first letter
-        let capitalized: String = word.chars().enumerate()
-            .map(|(i, c)| if i == 0 { c.to_uppercase().next().unwrap() } else { c })
-            .collect();
-        result.push(capitalized);
-    }
-    
-    // Add a random number
-    let num: u16 = rng.gen_range(10..100);
-    result.push(num.to_string());
-    
-    // Add a random symbol
-    let symbols = ['!', '@', '#', '$', '%', '&', '*'];
-    let symbol = symbols.choose(&mut rng).unwrap();
-    
-    result.join("-") + &symbol.to_string()
-}
-
-fn handle_transfer(cmd: TransferCommands, vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
-    use import_export::ImportExportManager;
+fn handle_transfer(cmd: TransferCommands, vault_file: Option<&str>) -> PassmanResult<()> {
+    use utils::import_export::ImportExportManager;
     
     match cmd {
         TransferCommands::Export { output, format } => {
@@ -593,8 +525,8 @@ fn handle_transfer(cmd: TransferCommands, vault_file: Option<&str>) -> Result<()
     Ok(())
 }
 
-fn handle_config(cmd: ConfigCommands) -> Result<(), Box<dyn Error>> {
-    use config::{get_config, get_config_mut, save_config, reload_config, Config as AppConfig};
+fn handle_config(cmd: ConfigCommands) -> PassmanResult<()> {
+    use core::config::{get_config, get_config_mut, save_config, reload_config, Config as AppConfig};
     
     match cmd {
         ConfigCommands::Show => {
@@ -716,7 +648,7 @@ fn format_duration(secs: u64) -> String {
     }
 }
 
-fn handle_backup(vault_file: Option<&str>, output: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_backup(vault_file: Option<&str>, output: Option<&str>) -> PassmanResult<()> {
     // Verify vault exists and password is correct
     let master_password = read_password_secure("Enter master password: ")?;
     let _ = VaultManager::load(&master_password, vault_file)?;
@@ -736,8 +668,8 @@ fn handle_backup(vault_file: Option<&str>, output: Option<&str>) -> Result<(), B
     Ok(())
 }
 
-fn handle_health(vault_file: Option<&str>, verbose: bool, issues_only: bool) -> Result<(), Box<dyn Error>> {
-    use health::{PasswordHealthAnalyzer, PasswordHealth};
+fn handle_health(vault_file: Option<&str>, verbose: bool, issues_only: bool) -> PassmanResult<()> {
+    use utils::health::{PasswordHealthAnalyzer, PasswordHealth};
     
     let master_password = read_password_secure("Enter master password: ")?;
     let vault = VaultManager::load(&master_password, vault_file)?;
@@ -829,7 +761,7 @@ fn handle_health(vault_file: Option<&str>, verbose: bool, issues_only: bool) -> 
     Ok(())
 }
 
-fn handle_change_password(vault_file: Option<&str>) -> Result<(), Box<dyn Error>> {
+fn handle_change_password(vault_file: Option<&str>) -> PassmanResult<()> {
     println!("🔐 Change Master Password");
     println!("{}", "-".repeat(40));
     

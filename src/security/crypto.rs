@@ -1,8 +1,12 @@
 use aes_gcm::{Aes256Gcm, KeyInit};
 use aes_gcm::aead::{Aead, generic_array::GenericArray};
 use argon2::{Argon2, password_hash::SaltString, PasswordHasher};
+use sha2::Sha256;
+use hmac::{Hmac, Mac as HmacMac};
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
+
+type HmacSha256 = Hmac<Sha256>;
 
 /// Secure key wrapper that automatically zeroizes on drop
 #[derive(Clone, ZeroizeOnDrop)]
@@ -32,6 +36,13 @@ impl std::ops::Deref for Key {
     }
 }
 
+/// A pair of keys derived from a master key for domain separation:
+/// one for AES-256-GCM encryption, one for HMAC-SHA256 authentication.
+pub struct KeyPair {
+    pub encryption_key: Key,
+    pub hmac_key: Key,
+}
+
 #[derive(Debug)]
 pub enum CryptoError {
     KeyDerivation(String),
@@ -51,12 +62,51 @@ impl std::fmt::Display for CryptoError {
 
 impl std::error::Error for CryptoError {}
 
-pub fn derive_key(password: &str, salt: &SaltString) -> Result<Key, CryptoError> {
-    // Use Argon2id with secure parameters
+/// Argon2 parameters for key derivation
+pub struct Argon2Params {
+    pub memory_kb: u32,
+    pub time_cost: u32,
+    pub parallelism: u32,
+}
+
+impl Default for Argon2Params {
+    fn default() -> Self {
+        Self {
+            memory_kb: 65536,
+            time_cost: 3,
+            parallelism: 4,
+        }
+    }
+}
+
+/// Derive a sub-key from a master key using HMAC-SHA256 (HKDF-Expand pattern)
+fn derive_subkey(master_key: &[u8], label: &[u8]) -> Key {
+    let mut mac = <HmacSha256 as HmacMac>::new_from_slice(master_key)
+        .expect("HMAC can take key of any size");
+    mac.update(label);
+    mac.update(&[0x01]); // counter byte for HKDF-Expand
+    let result = mac.finalize().into_bytes();
+    Key::new(*GenericArray::from_slice(&result))
+}
+
+/// Derive a key pair (encryption + HMAC) from a password and salt.
+/// Uses Argon2id to derive a master key, then HKDF-Expand to split
+/// into separate encryption and HMAC keys for domain separation.
+pub fn derive_key_pair(password: &str, salt: &SaltString, params: &Argon2Params) -> Result<KeyPair, CryptoError> {
+    let master_key = derive_key_with_params(password, salt, params)?;
+    let encryption_key = derive_subkey(master_key.as_ref(), b"passman-encryption-key");
+    let hmac_key = derive_subkey(master_key.as_ref(), b"passman-hmac-key");
+    // master_key is dropped here and zeroized via ZeroizeOnDrop
+    Ok(KeyPair { encryption_key, hmac_key })
+}
+
+/// Derive a single key using Argon2 with configurable parameters.
+fn derive_key_with_params(password: &str, salt: &SaltString, params: &Argon2Params) -> Result<Key, CryptoError> {
     let argon2 = Argon2::new(
         argon2::Algorithm::Argon2id,
         argon2::Version::V0x13,
-        argon2::Params::new(65536, 3, 4, None).unwrap()
+        argon2::Params::new(params.memory_kb, params.time_cost, params.parallelism, None)
+            .map_err(|e| CryptoError::KeyDerivation(e.to_string()))?
     );
     
     let hash = argon2.hash_password(password.as_bytes(), salt)
@@ -72,11 +122,15 @@ pub fn derive_key(password: &str, salt: &SaltString) -> Result<Key, CryptoError>
     key_array[..len].copy_from_slice(&key_bytes[..len]);
     
     let key = Key::new(*GenericArray::from_slice(&key_array));
-    
-    // Zeroize the temporary key_array
     key_array.zeroize();
     
     Ok(key)
+}
+
+/// Derive a single key (backward-compatible wrapper using default Argon2 params).
+/// Used by legacy code paths and tests.
+pub fn derive_key(password: &str, salt: &SaltString) -> Result<Key, CryptoError> {
+    derive_key_with_params(password, salt, &Argon2Params::default())
 }
 
 pub fn encrypt_data(key: &Key, plaintext: &[u8]) -> Result<(Vec<u8>, [u8; 12]), CryptoError> {

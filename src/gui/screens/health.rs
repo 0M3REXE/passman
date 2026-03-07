@@ -78,16 +78,16 @@ impl PassmanApp {
                             ui.horizontal(|ui| {
                                 ui.label(&report.entry_id);
                                 let health_text = match &report.health {
-                                    crate::health::PasswordHealth::Excellent => "Excellent",
-                                    crate::health::PasswordHealth::Good => "Good", 
-                                    crate::health::PasswordHealth::Warning { .. } => "Warning",
-                                    crate::health::PasswordHealth::Critical { .. } => "Critical",
+                                    crate::utils::health::PasswordHealth::Excellent => "Excellent",
+                                    crate::utils::health::PasswordHealth::Good => "Good", 
+                                    crate::utils::health::PasswordHealth::Warning { .. } => "Warning",
+                                    crate::utils::health::PasswordHealth::Critical { .. } => "Critical",
                                 };
                                 let color = match &report.health {
-                                    crate::health::PasswordHealth::Excellent => egui::Color32::GREEN,
-                                    crate::health::PasswordHealth::Good => egui::Color32::LIGHT_GREEN,
-                                    crate::health::PasswordHealth::Warning { .. } => egui::Color32::YELLOW,
-                                    crate::health::PasswordHealth::Critical { .. } => egui::Color32::RED,
+                                    crate::utils::health::PasswordHealth::Excellent => egui::Color32::GREEN,
+                                    crate::utils::health::PasswordHealth::Good => egui::Color32::LIGHT_GREEN,
+                                    crate::utils::health::PasswordHealth::Warning { .. } => egui::Color32::YELLOW,
+                                    crate::utils::health::PasswordHealth::Critical { .. } => egui::Color32::RED,
                                 };
                                 ui.colored_label(color, health_text);
                                 ui.label(format!("Age: {} days", report.age_days));

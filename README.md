@@ -20,7 +20,7 @@ A modern password manager written in Rust with both GUI and CLI interfaces, feat
 - **Multiple Vaults**: Support for multiple vault files
 - **Clipboard Integration**: Secure clipboard operations for passwords
 - **Cross-Platform**: Works on Windows, macOS, and Linux
-- **Zero Dependencies**: Self-contained executable with no external dependencies
+- **Self-Contained Binary**: Single executable with no runtime dependencies
 
 ## Installation
 
@@ -102,10 +102,10 @@ passman rm github
 This project is licensed under the MIT License.
 
 ### Screenshots
-![Welcome Page](<pictures/Screenshot 2025-12-11 191320.png>)
-![Welcome page 2](<pictures/Screenshot 2025-12-11 191338.png>)
-![Create New Vault](<pictures/Screenshot 2025-12-11 191649.png>)
-![Password Vault](<pictures/Screenshot 2025-12-11 191452.png>)
-![Adding New Entry](<pictures/Screenshot 2025-12-11 191503.png>)
-![Adding New Entry 1](<pictures/Screenshot 2025-12-11 191534.png>)
-![Password Vault with Entry](<pictures/Screenshot 2025-12-11 191544.png>)
+![Welcome Page](pictures/Screenshot%202025-12-11%20191320.png)
+![Welcome page 2](pictures/Screenshot%202025-12-11%20191338.png)
+![Create New Vault](pictures/Screenshot%202025-12-11%20191649.png)
+![Password Vault](pictures/Screenshot%202025-12-11%20191452.png)
+![Adding New Entry](pictures/Screenshot%202025-12-11%20191503.png)
+![Adding New Entry 1](pictures/Screenshot%202025-12-11%20191534.png)
+![Password Vault with Entry](pictures/Screenshot%202025-12-11%20191544.png)

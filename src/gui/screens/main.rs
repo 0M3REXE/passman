@@ -164,7 +164,7 @@ impl PassmanApp {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-            let filtered_entries: Vec<(String, crate::model::Entry)> = self.filter_entries()
+            let filtered_entries: Vec<(String, crate::core::model::Entry)> = self.filter_entries()
                 .into_iter()
                 .map(|(id, entry)| (id.clone(), entry.clone()))
                 .collect();
@@ -196,7 +196,7 @@ impl PassmanApp {
     }
 
     /// Render a single entry card
-    fn render_entry_card(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, id: &str, entry: &crate::model::Entry) {
+    fn render_entry_card(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, id: &str, entry: &crate::core::model::Entry) {
         // Get all theme colors upfront to avoid borrow issues
         let current_theme = self.current_theme.clone();
         let frame_fill = theme::frame_fill(&current_theme);

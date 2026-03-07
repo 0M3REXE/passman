@@ -1,11 +1,20 @@
-#![allow(dead_code)]
+//! Import / Export Module
+//!
+//! Supports JSON, CSV, and browser (Chrome / Firefox) formats for importing
+//! and exporting password entries.
 
+use crate::error::{PassmanError, PassmanResult, TransferError};
 use crate::model::{Entry, Vault};
-use crate::vault::VaultManager;
-use serde::{Serialize, Deserialize};
+use crate::security::vault::VaultManager;
+
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use zeroize::Zeroizing;
+
+// ---------------------------------------------------------------------------
+// Serialization models
+// ---------------------------------------------------------------------------
 
 #[derive(Serialize, Deserialize)]
 struct ExportEntry {
@@ -26,7 +35,6 @@ struct ExportData {
 }
 
 #[derive(Deserialize)]
-#[allow(dead_code)]
 struct CsvEntry {
     #[serde(alias = "name", alias = "title", alias = "site")]
     id: String,
@@ -39,18 +47,20 @@ struct CsvEntry {
     url: Option<String>,
 }
 
+// ---------------------------------------------------------------------------
+// ImportExportManager
+// ---------------------------------------------------------------------------
+
 pub struct ImportExportManager;
 
 impl ImportExportManager {
-    /// Export vault to JSON format
-    pub fn export_json(
-        vault: &Vault,
-        output_path: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    /// Export vault to JSON format.
+    pub fn export_json(vault: &Vault, output_path: &str) -> PassmanResult<()> {
         let entries: Vec<ExportEntry> = vault
             .list_entries()
             .iter()
-            .filter_map(|id| {                vault.get_entry(id).map(|entry| ExportEntry {
+            .filter_map(|id| {
+                vault.get_entry(id).map(|entry| ExportEntry {
                     id: id.to_string(),
                     username: entry.username.clone(),
                     password: entry.password_str().to_string(),
@@ -69,33 +79,39 @@ impl ImportExportManager {
         };
 
         let json = serde_json::to_string_pretty(&export_data)?;
-        let mut file = File::create(output_path)?;
+        let mut file = File::create(output_path).map_err(|e| {
+            PassmanError::Transfer(TransferError::PermissionDenied(e.to_string()))
+        })?;
         file.write_all(json.as_bytes())?;
 
-        println!("✓ Exported {} entries to {}", export_data.entries.len(), output_path);
+        println!(
+            "✓ Exported {} entries to {}",
+            export_data.entries.len(),
+            output_path
+        );
         Ok(())
     }
 
-    /// Export vault to CSV format
-    pub fn export_csv(
-        vault: &Vault,
-        output_path: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = File::create(output_path)?;
+    /// Export vault to CSV format (**WARNING**: plaintext passwords).
+    pub fn export_csv(vault: &Vault, output_path: &str) -> PassmanResult<()> {
+        let mut file = File::create(output_path).map_err(|e| {
+            PassmanError::Transfer(TransferError::PermissionDenied(e.to_string()))
+        })?;
         writeln!(file, "id,username,password,note,url")?;
 
-        let mut count = 0;        for id in vault.list_entries() {
+        let mut count = 0;
+        for id in vault.list_entries() {
             if let Some(entry) = vault.get_entry(id) {
                 let note = entry.note.as_deref().unwrap_or("");
                 let url = entry.url.as_deref().unwrap_or("");
                 writeln!(
                     file,
                     "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
-                    id.replace("\"", "\"\""),
-                    entry.username.replace("\"", "\"\""),
-                    entry.password_str().replace("\"", "\"\""),
-                    note.replace("\"", "\"\""),
-                    url.replace("\"", "\"\"")
+                    id.replace('"', "\"\""),
+                    entry.username.replace('"', "\"\""),
+                    entry.password_str().replace('"', "\"\""),
+                    note.replace('"', "\"\""),
+                    url.replace('"', "\"\""),
                 )?;
                 count += 1;
             }
@@ -105,209 +121,221 @@ impl ImportExportManager {
         Ok(())
     }
 
-    /// Import from JSON format
+    /// Import entries from a JSON file.
     pub fn import_json(
         input_path: &str,
         master_password: &Zeroizing<String>,
         vault_file: Option<&str>,
         merge: bool,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = File::open(input_path)?;
+    ) -> PassmanResult<()> {
+        let mut file = File::open(input_path).map_err(|_| {
+            PassmanError::Transfer(TransferError::FileNotFound(input_path.to_string()))
+        })?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
-        let import_data: ExportData = serde_json::from_str(&contents)?;
+        let import_data: ExportData = serde_json::from_str(&contents)
+            .map_err(|e| PassmanError::Transfer(TransferError::ParseError(e.to_string())))?;
 
-        let mut vault = if merge && VaultManager::exists(vault_file) {
-            VaultManager::load(master_password, vault_file)?
-        } else {
-            if VaultManager::exists(vault_file) && !merge {
-                return Err("Vault already exists! Use --merge flag to merge with existing vault or choose a different vault file.".into());
-            }
-            Vault::new()
-        };
+        let mut vault = Self::prepare_vault(master_password, vault_file, merge)?;
 
-        let mut imported_count = 0;
-        let mut skipped_count = 0;
+        let (mut imported, mut skipped) = (0usize, 0usize);
 
         for export_entry in import_data.entries {
             if vault.get_entry(&export_entry.id).is_some() {
                 println!("⚠ Skipping existing entry: {}", export_entry.id);
-                skipped_count += 1;
+                skipped += 1;
                 continue;
             }
-
-            let entry = Entry::new(
-                export_entry.username,
-                export_entry.password,
-                export_entry.note,
-            );
-
-            vault.add_entry(export_entry.id.clone(), entry);
-            imported_count += 1;
+            let entry = Entry::new(export_entry.username, export_entry.password, export_entry.note);
+            vault.add_entry(export_entry.id, entry);
+            imported += 1;
         }
 
-        if !VaultManager::exists(vault_file) {
-            VaultManager::init(master_password, vault_file)?;
-        }
-        VaultManager::save(&vault, master_password, vault_file)?;
-
-        println!("✓ Import completed:");
-        println!("  - Imported: {} entries", imported_count);
-        if skipped_count > 0 {
-            println!("  - Skipped: {} existing entries", skipped_count);
-        }
-
+        Self::finalize_vault(&vault, master_password, vault_file)?;
+        Self::print_import_summary(imported, skipped);
         Ok(())
     }
 
-    /// Import from CSV format
+    /// Import entries from a CSV file.
     pub fn import_csv(
         input_path: &str,
         master_password: &Zeroizing<String>,
         vault_file: Option<&str>,
         merge: bool,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = File::open(input_path)?;
+    ) -> PassmanResult<()> {
+        let mut file = File::open(input_path).map_err(|_| {
+            PassmanError::Transfer(TransferError::FileNotFound(input_path.to_string()))
+        })?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
-        let mut vault = if merge && VaultManager::exists(vault_file) {
-            VaultManager::load(master_password, vault_file)?
-        } else {
-            if VaultManager::exists(vault_file) && !merge {
-                return Err("Vault already exists! Use --merge flag to merge with existing vault or choose a different vault file.".into());
-            }
-            Vault::new()
-        };
-
+        let mut vault = Self::prepare_vault(master_password, vault_file, merge)?;
         let mut reader = csv::Reader::from_reader(contents.as_bytes());
-        let mut imported_count = 0;
-        let mut skipped_count = 0;
+
+        let (mut imported, mut skipped) = (0usize, 0usize);
 
         for result in reader.deserialize() {
             let csv_entry: CsvEntry = result?;
 
             if vault.get_entry(&csv_entry.id).is_some() {
                 println!("⚠ Skipping existing entry: {}", csv_entry.id);
-                skipped_count += 1;
+                skipped += 1;
                 continue;
-            }            let mut entry = Entry::new(
-                csv_entry.username,
-                csv_entry.password,
-                csv_entry.note,
-            );
+            }
+
+            let mut entry = Entry::new(csv_entry.username, csv_entry.password, csv_entry.note);
             entry.url = csv_entry.url;
-
-            vault.add_entry(csv_entry.id.clone(), entry);
-            imported_count += 1;
+            vault.add_entry(csv_entry.id, entry);
+            imported += 1;
         }
 
-        if !VaultManager::exists(vault_file) {
-            VaultManager::init(master_password, vault_file)?;
-        }
-        VaultManager::save(&vault, master_password, vault_file)?;
-
-        println!("✓ Import completed:");
-        println!("  - Imported: {} entries", imported_count);
-        if skipped_count > 0 {
-            println!("  - Skipped: {} existing entries", skipped_count);
-        }
-
+        Self::finalize_vault(&vault, master_password, vault_file)?;
+        Self::print_import_summary(imported, skipped);
         Ok(())
     }
 
-    /// Import from Chrome/Firefox format (basic JSON)
+    /// Import from Chrome or Firefox JSON export.
     pub fn import_browser(
         input_path: &str,
         master_password: &Zeroizing<String>,
         vault_file: Option<&str>,
         browser_type: &str,
         merge: bool,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = File::open(input_path)?;
+    ) -> PassmanResult<()> {
+        let mut file = File::open(input_path).map_err(|_| {
+            PassmanError::Transfer(TransferError::FileNotFound(input_path.to_string()))
+        })?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
-        let json_data: serde_json::Value = serde_json::from_str(&contents)?;
+        let json_data: serde_json::Value = serde_json::from_str(&contents)
+            .map_err(|e| PassmanError::Transfer(TransferError::ParseError(e.to_string())))?;
 
-        let mut vault = if merge && VaultManager::exists(vault_file) {
-            VaultManager::load(master_password, vault_file)?
-        } else {
-            if VaultManager::exists(vault_file) && !merge {
-                return Err("Vault already exists! Use --merge flag to merge with existing vault or choose a different vault file.".into());
-            }
-            Vault::new()
-        };
+        let mut vault = Self::prepare_vault(master_password, vault_file, merge)?;
+        let (mut imported, mut skipped) = (0usize, 0usize);
 
-        let mut imported_count = 0;
-        let mut skipped_count = 0;
-
-        // Handle Chrome export format
-        if browser_type == "chrome" {
-            if let Some(passwords) = json_data.get("passwords").and_then(|p| p.as_array()) {
-                for password_entry in passwords {
-                    if let (Some(origin), Some(username), Some(password)) = (
-                        password_entry.get("origin").and_then(|o| o.as_str()),
-                        password_entry.get("username").and_then(|u| u.as_str()),
-                        password_entry.get("password").and_then(|p| p.as_str()),
-                    ) {
-                        let id = format!("{}_{}", origin, username);
-                        
-                        if vault.get_entry(&id).is_some() {
-                            println!("⚠ Skipping existing entry: {}", id);
-                            skipped_count += 1;
-                            continue;
-                        }
-
-                        let entry = Entry::new(
-                            username.to_string(),
-                            password.to_string(),
-                            Some(format!("Imported from Chrome: {}", origin)),
-                        );
-
-                        vault.add_entry(id, entry);
-                        imported_count += 1;
-                    }
-                }
+        match browser_type {
+            "chrome" => Self::parse_chrome(&json_data, &mut vault, &mut imported, &mut skipped),
+            "firefox" => Self::parse_firefox(&json_data, &mut vault, &mut imported, &mut skipped),
+            other => {
+                return Err(PassmanError::Transfer(TransferError::UnsupportedFormat(
+                    other.to_string(),
+                )));
             }
         }
 
-        if !VaultManager::exists(vault_file) {
-            VaultManager::init(master_password, vault_file)?;
-        }
-        VaultManager::save(&vault, master_password, vault_file)?;
-
+        Self::finalize_vault(&vault, master_password, vault_file)?;
         println!("✓ Browser import completed:");
-        println!("  - Imported: {} entries", imported_count);
-        if skipped_count > 0 {
-            println!("  - Skipped: {} existing entries", skipped_count);
-        }
-
+        Self::print_import_summary(imported, skipped);
         Ok(())
     }
 
-    /// Create automatic backup before risky operations
-    pub fn create_auto_backup(vault_file: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
-        VaultManager::create_backup(vault_file)
-    }    /// List available backup files
-    #[allow(dead_code)]
-    pub fn list_backups() -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        let mut backups = Vec::new();
-        
-        for entry in std::fs::read_dir(".")? {
-            let entry = entry?;
-            let path = entry.path();
-            if let Some(name) = path.file_name() {
-                if let Some(name_str) = name.to_str() {
-                    if name_str.contains(".backup.") && name_str.ends_with(".dat") {
-                        backups.push(name_str.to_string());
+    // ----- private helpers -----
+
+    /// Load or create the target vault depending on `merge`.
+    fn prepare_vault(
+        master_password: &Zeroizing<String>,
+        vault_file: Option<&str>,
+        merge: bool,
+    ) -> PassmanResult<Vault> {
+        if merge && VaultManager::exists(vault_file) {
+            VaultManager::load(master_password, vault_file)
+        } else {
+            if VaultManager::exists(vault_file) && !merge {
+                return Err(PassmanError::Transfer(TransferError::InvalidData(
+                    "Vault already exists! Use --merge to merge with existing vault.".into(),
+                )));
+            }
+            Ok(Vault::new())
+        }
+    }
+
+    /// Ensure the vault file exists on disk and save.
+    fn finalize_vault(
+        vault: &Vault,
+        master_password: &Zeroizing<String>,
+        vault_file: Option<&str>,
+    ) -> PassmanResult<()> {
+        if !VaultManager::exists(vault_file) {
+            VaultManager::init(master_password, vault_file)?;
+        }
+        VaultManager::save(vault, master_password, vault_file)
+    }
+
+    fn print_import_summary(imported: usize, skipped: usize) {
+        println!("✓ Import completed:");
+        println!("  - Imported: {} entries", imported);
+        if skipped > 0 {
+            println!("  - Skipped: {} existing entries", skipped);
+        }
+    }
+
+    fn parse_chrome(
+        json: &serde_json::Value,
+        vault: &mut Vault,
+        imported: &mut usize,
+        skipped: &mut usize,
+    ) {
+        if let Some(passwords) = json.get("passwords").and_then(|p| p.as_array()) {
+            for entry in passwords {
+                if let (Some(origin), Some(username), Some(password)) = (
+                    entry.get("origin").and_then(|o| o.as_str()),
+                    entry.get("username").and_then(|u| u.as_str()),
+                    entry.get("password").and_then(|p| p.as_str()),
+                ) {
+                    let id = format!("{}_{}", origin, username);
+                    if vault.get_entry(&id).is_some() {
+                        println!("⚠ Skipping existing entry: {}", id);
+                        *skipped += 1;
+                        continue;
                     }
+                    let e = Entry::new(
+                        username.to_string(),
+                        password.to_string(),
+                        Some(format!("Imported from Chrome: {}", origin)),
+                    );
+                    vault.add_entry(id, e);
+                    *imported += 1;
                 }
             }
         }
-        
-        backups.sort_by(|a, b| b.cmp(a)); // Most recent first
-        Ok(backups)
+    }
+
+    fn parse_firefox(
+        json: &serde_json::Value,
+        vault: &mut Vault,
+        imported: &mut usize,
+        skipped: &mut usize,
+    ) {
+        if let Some(logins) = json.get("logins").and_then(|l| l.as_array()) {
+            for login in logins {
+                if let (Some(hostname), Some(username), Some(password)) = (
+                    login.get("hostname").and_then(|h| h.as_str()),
+                    login
+                        .get("encryptedUsername")
+                        .and_then(|u| u.as_str())
+                        .or_else(|| login.get("username").and_then(|u| u.as_str())),
+                    login
+                        .get("encryptedPassword")
+                        .and_then(|p| p.as_str())
+                        .or_else(|| login.get("password").and_then(|p| p.as_str())),
+                ) {
+                    let id = format!("{}_{}", hostname, username);
+                    if vault.get_entry(&id).is_some() {
+                        println!("⚠ Skipping existing entry: {}", id);
+                        *skipped += 1;
+                        continue;
+                    }
+                    let e = Entry::new(
+                        username.to_string(),
+                        password.to_string(),
+                        Some(format!("Imported from Firefox: {}", hostname)),
+                    );
+                    vault.add_entry(id, e);
+                    *imported += 1;
+                }
+            }
+        }
     }
 }

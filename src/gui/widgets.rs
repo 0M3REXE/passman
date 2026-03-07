@@ -2,8 +2,6 @@
 //!
 //! Reusable UI widgets and button helpers.
 
-#![allow(dead_code)]
-
 use eframe::egui;
 use std::collections::HashMap;
 
@@ -53,26 +51,6 @@ impl ButtonWidgets {
         )
         .fill(egui::Color32::from_rgb(239, 68, 68))
         .stroke(egui::Stroke::NONE)
-        .rounding(egui::Rounding::same(6.0));
-        ui.add_sized(size, button)
-    }
-    
-    /// Icon button (compact, for toolbars)
-    pub fn icon(ui: &mut egui::Ui, icon: &str, size: f32, tooltip: &str) -> egui::Response {
-        let button = egui::Button::new(icon)
-            .fill(egui::Color32::TRANSPARENT)
-            .stroke(egui::Stroke::NONE)
-            .rounding(egui::Rounding::same(4.0));
-        ui.add_sized([size, size], button).on_hover_text(tooltip)
-    }
-    
-    /// Outlined button variant
-    pub fn outlined(ui: &mut egui::Ui, text: &str, size: [f32; 2], color: egui::Color32) -> egui::Response {
-        let button = egui::Button::new(
-            egui::RichText::new(text).color(color)
-        )
-        .fill(egui::Color32::TRANSPARENT)
-        .stroke(egui::Stroke::new(1.5, color))
         .rounding(egui::Rounding::same(6.0));
         ui.add_sized(size, button)
     }
@@ -186,54 +164,6 @@ pub fn show_password_strength_indicator(ui: &mut egui::Ui, password: &str) {
     }
 }
 
-/// Analyze password and return strength description and suggestions
-pub fn analyze_password_strength(password: &str) -> (String, Vec<String>) {
-    if password.is_empty() {
-        return (String::new(), Vec::new());
-    }
-
-    let mut score = 0;
-    let mut suggestions = Vec::new();
-
-    // Length check
-    if password.len() >= 12 {
-        score += 25;
-    } else if password.len() >= 8 {
-        score += 15;
-    } else {
-        suggestions.push("Use at least 8 characters".to_string());
-    }
-
-    // Character variety checks
-    let has_lowercase = password.chars().any(|c| c.is_lowercase());
-    let has_uppercase = password.chars().any(|c| c.is_uppercase());
-    let has_numbers = password.chars().any(|c| c.is_numeric());
-    let has_symbols = password.chars().any(|c| !c.is_alphanumeric());
-
-    if has_lowercase { score += 15; } else { suggestions.push("Add lowercase letters".to_string()); }
-    if has_uppercase { score += 15; } else { suggestions.push("Add uppercase letters".to_string()); }
-    if has_numbers { score += 15; } else { suggestions.push("Add numbers".to_string()); }
-    if has_symbols { score += 15; } else { suggestions.push("Add symbols (!@#$%^&*)".to_string()); }
-
-    // Repetition check
-    let unique_chars: std::collections::HashSet<char> = password.chars().collect();
-    if unique_chars.len() as f32 / password.len() as f32 > 0.7 {
-        score += 15;
-    } else {
-        suggestions.push("Avoid repeating characters".to_string());
-    }
-
-    // Set strength description
-    let strength = match score {
-        0..=30 => format!("Weak ({}%)", score),
-        31..=60 => format!("Fair ({}%)", score),
-        61..=80 => format!("Good ({}%)", score),
-        _ => format!("Strong ({}%)", score),
-    };
-
-    (strength, suggestions)
-}
-
 // ============================================================================
 // CARD HELPERS
 // ============================================================================
@@ -301,42 +231,6 @@ pub fn paint_strength_dots(ui: &mut egui::Ui, score: u32) {
             ui.painter().circle_filled(rect.center(), 3.5, dot_color);
         }
     });
-}
-
-/// Section header with optional action
-pub fn section_header(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(title).size(13.0).color(egui::Color32::from_rgb(156, 163, 175)));
-    });
-    ui.add_space(2.0);
-}
-
-/// Styled search bar
-pub fn styled_search_bar(
-    ui: &mut egui::Ui, 
-    search_query: &mut String, 
-    width: f32,
-    bg_color: egui::Color32,
-    border_color: egui::Color32,
-) -> egui::Response {
-    egui::Frame::none()
-        .fill(bg_color)
-        .rounding(egui::Rounding::same(8.0))
-        .stroke(egui::Stroke::new(1.0, border_color))
-        .inner_margin(egui::Margin::symmetric(12.0, 8.0))
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("🔍").size(14.0).color(egui::Color32::from_rgb(156, 163, 175)));
-                ui.add_space(4.0);
-                ui.add(
-                    egui::TextEdit::singleline(search_query)
-                        .hint_text("Search entries...")
-                        .frame(false)
-                        .desired_width(width - 50.0)
-                )
-            }).inner
-        }).inner
 }
 
 /// Empty state widget with icon and message

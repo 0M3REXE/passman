@@ -2,8 +2,6 @@
 //!
 //! Shared types and enums used throughout the GUI.
 
-#![allow(dead_code)]
-
 use std::time::Instant;
 
 // UI Constants
@@ -11,30 +9,6 @@ pub const BUTTON_HEIGHT: f32 = 36.0;
 pub const INPUT_WIDTH: f32 = 350.0;
 pub const SPACING: f32 = 10.0;
 pub const PADDING: f32 = 20.0;
-pub const MIN_WINDOW_WIDTH: f32 = 500.0;
-pub const MIN_WINDOW_HEIGHT: f32 = 400.0;
-
-/// Get responsive input width based on available space
-pub fn responsive_input_width(available_width: f32) -> f32 {
-    let base = INPUT_WIDTH;
-    if available_width < 600.0 {
-        (available_width * 0.7).max(200.0).min(base)
-    } else if available_width > 1000.0 {
-        base * 1.3
-    } else {
-        base
-    }
-}
-
-/// Get responsive button size
-#[allow(dead_code)]
-pub fn responsive_button_size(available_width: f32) -> [f32; 2] {
-    if available_width < 600.0 {
-        [120.0, BUTTON_HEIGHT]
-    } else {
-        [150.0, BUTTON_HEIGHT]
-    }
-}
 
 /// Application screens
 #[derive(Default, PartialEq, Clone)]
@@ -57,7 +31,6 @@ pub enum ToastType {
     Success,
     Error,
     Info,
-    Warning,
 }
 
 /// Toast notification with auto-dismiss
@@ -79,12 +52,6 @@ impl Toast {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn with_duration(mut self, secs: f32) -> Self {
-        self.duration_secs = secs;
-        self
-    }
-
     pub fn is_expired(&self) -> bool {
         self.created_at.elapsed().as_secs_f32() >= self.duration_secs
     }
@@ -99,12 +66,6 @@ impl Toast {
 pub enum Theme {
     #[default]
     Dark,
-}
-
-impl Theme {
-    pub fn name(&self) -> &'static str {
-        "Dark"
-    }
 }
 
 /// Export file formats

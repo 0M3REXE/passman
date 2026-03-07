@@ -2,68 +2,9 @@
 //!
 //! Modal dialogs, loading overlays, and onboarding wizard.
 
-#![allow(dead_code)]
-
 use eframe::egui;
 use super::types::{SPACING, BUTTON_HEIGHT};
 use super::widgets::ButtonWidgets;
-
-/// Render confirmation dialog for delete
-pub fn render_confirmation_dialog(
-    ctx: &egui::Context,
-    pending_delete: &Option<String>,
-    on_confirm: impl FnOnce(&str),
-    on_cancel: impl FnOnce(),
-) -> Option<String> {
-    if let Some(entry_id) = pending_delete.clone() {
-        // Modal background overlay
-        egui::Area::new(egui::Id::new("confirm_overlay"))
-            .anchor(egui::Align2::LEFT_TOP, egui::vec2(0.0, 0.0))
-            .order(egui::Order::Middle)
-            .show(ctx, |ui| {
-                let screen_rect = ctx.screen_rect();
-                ui.painter().rect_filled(
-                    screen_rect,
-                    0.0,
-                    egui::Color32::from_black_alpha(150),
-                );
-            });
-        
-        let mut result = Some(entry_id.clone());
-        
-        // Dialog window
-        egui::Window::new("⚠️ Confirm Delete")
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                ui.add_space(SPACING);
-                ui.label(format!("Are you sure you want to delete '{}'?", entry_id));
-                ui.add_space(SPACING);
-                ui.label("This action cannot be undone.");
-                ui.add_space(SPACING * 2.0);
-                
-                ui.horizontal(|ui| {
-                    if ButtonWidgets::danger(ui, "Delete", [100.0, BUTTON_HEIGHT]).clicked() {
-                        on_confirm(&entry_id);
-                        result = None;
-                    }
-                    
-                    ui.add_space(SPACING);
-                    
-                    if ButtonWidgets::secondary(ui, "Cancel", [100.0, BUTTON_HEIGHT]).clicked() {
-                        on_cancel();
-                        result = None;
-                    }
-                });
-            });
-        
-        result
-    } else {
-        None
-    }
-}
 
 /// Show loading overlay with animated spinner
 pub fn render_loading_overlay(ctx: &egui::Context, is_loading: bool, loading_message: &str) {

@@ -37,11 +37,6 @@ pub fn render_toasts(ctx: &egui::Context, toasts: &[Toast]) {
                             "ℹ",
                             egui::Color32::WHITE,
                         ),
-                        ToastType::Warning => (
-                            egui::Color32::from_rgb(255, 193, 7),
-                            "⚠",
-                            egui::Color32::BLACK,
-                        ),
                     };
                     
                     // Fade out effect
