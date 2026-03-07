@@ -10,7 +10,7 @@ use super::super::app::PassmanApp;
 impl PassmanApp {
     /// Show password health dashboard
     pub fn show_health_dashboard(&mut self, ui: &mut egui::Ui) {
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let border_color = theme::border_color(&current_theme);
         
         // ════════════════════════════════════════════════════════════════════

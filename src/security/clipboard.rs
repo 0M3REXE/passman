@@ -6,7 +6,6 @@
 //! On Windows, this module also excludes sensitive content from clipboard history
 //! and clears it from history when clearing the clipboard.
 
-use clipboard::{ClipboardContext, ClipboardProvider};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -65,6 +64,7 @@ pub type ClipboardResult<T> = Result<T, ClipboardError>;
 
 /// Clipboard operation errors
 #[derive(Debug, Clone)]
+#[allow(clippy::enum_variant_names)]
 pub enum ClipboardError {
     /// Failed to access clipboard
     AccessError(String),
@@ -138,13 +138,13 @@ impl SecureClipboard {
             self.copy_windows_secure(text)?;
         }
 
-        // On non-Windows, use the standard clipboard crate
+        // On non-Windows, use arboard (supports X11, Wayland, macOS)
         #[cfg(not(target_os = "windows"))]
         {
-            let mut ctx: ClipboardContext = ClipboardProvider::new()
+            let mut clipboard = arboard::Clipboard::new()
                 .map_err(|e| ClipboardError::AccessError(e.to_string()))?;
 
-            ctx.set_contents(text.to_owned())
+            clipboard.set_text(text)
                 .map_err(|e| ClipboardError::SetError(e.to_string()))?;
         }
 
@@ -280,8 +280,8 @@ impl SecureClipboard {
             };
 
             if should_clear {
-                if let Ok(mut ctx) = ClipboardProvider::new() as Result<ClipboardContext, _> {
-                    let _ = ctx.set_contents(String::new());
+                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                    let _ = clipboard.clear();
                     log::debug!("Clipboard auto-cleared after {}s timeout", timeout);
                 }
 
@@ -296,10 +296,10 @@ impl SecureClipboard {
 
     /// Immediately clear the clipboard
     pub fn clear_now(&self) -> ClipboardResult<()> {
-        let mut ctx: ClipboardContext = ClipboardProvider::new()
+        let mut clipboard = arboard::Clipboard::new()
             .map_err(|e| ClipboardError::AccessError(e.to_string()))?;
 
-        ctx.set_contents(String::new())
+        clipboard.clear()
             .map_err(|e| ClipboardError::ClearError(e.to_string()))?;
 
         if let Ok(mut id) = self.content_id.lock() {

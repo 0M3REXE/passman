@@ -10,7 +10,6 @@ pub mod logging;
 use std::io::{self, IsTerminal, Write};
 use std::sync::LazyLock;
 
-use clipboard::{ClipboardContext, ClipboardProvider};
 use regex::Regex;
 use zeroize::Zeroizing;
 
@@ -52,9 +51,9 @@ impl Default for PasswordGenConfig {
 
 /// Copy text to the system clipboard.
 pub fn copy_to_clipboard(text: &str) -> PassmanResult<()> {
-    let mut ctx: ClipboardContext = ClipboardProvider::new()
+    let mut clipboard = arboard::Clipboard::new()
         .map_err(|e| format!("clipboard init failed: {}", e))?;
-    ctx.set_contents(text.to_owned())
+    clipboard.set_text(text)
         .map_err(|e| format!("clipboard set failed: {}", e))?;
     println!("✓ Copied to clipboard");
     Ok(())

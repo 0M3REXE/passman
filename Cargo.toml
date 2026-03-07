@@ -17,17 +17,15 @@ license = false
 eula = false
 
 [dependencies]
-aes = "0.8"
 aes-gcm = { version = "0.10", features = ["zeroize"] }
 argon2 = "0.5"
-clipboard = "0.5"
+arboard = "3"
 csv = "1.3"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 dirs = "5.0"
 eframe = "0.29"
 egui = "0.29"
-env_logger = "0.10"
 log = "0.4"
 rand = "0.8"
 rand_core = "0.6"
@@ -41,11 +39,8 @@ hmac = "0.12"
 typenum = "1.18"
 zeroize = { version = "1.6", features = ["derive"] }
 # Additional security and utility dependencies
-qr_code = "2.0"
-totp-rs = "5.4"
 uuid = { version = "1.6", features = ["v4"] }
 
-notify = "6.1"
 toml = "0.8"
 rfd = "0.15"  # Native file dialogs
 open = "5"    # Open URLs in browser
@@ -53,11 +48,10 @@ open = "5"    # Open URLs in browser
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.52", features = ["Win32_System_Memory", "Win32_Foundation", "Win32_System_Console", "Win32_Storage_FileSystem"] }
 
-# Unix-specific dependencies  
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
+# Unix-specific dependencies
+# (none currently)
 
-[build-dependencies]
+[target.'cfg(windows)'.build-dependencies]
 embed-resource = "2.4"
 
 [dev-dependencies]
@@ -74,4 +68,3 @@ strip = true
 [profile.dist]
 inherits = "release"
 lto = "thin"
-allow-dirty = ["ci"]

@@ -41,8 +41,6 @@ impl Default for SessionConfig {
 pub struct SessionManager {
     /// Current session state
     state: SessionState,
-    /// Last activity timestamp
-    last_activity: Option<Instant>,
     /// Session configuration
     config: SessionConfig,
     /// Failed login attempts counter
@@ -56,7 +54,6 @@ impl SessionManager {
     pub fn new() -> Self {
         Self {
             state: SessionState::Locked,
-            last_activity: None,
             config: SessionConfig::default(),
             failed_attempts: 0,
             lockout_start: None,
@@ -115,12 +112,6 @@ impl SessionManager {
         self.failed_attempts = 0;
         self.lockout_start = None;
         self.state = SessionState::Unlocked;
-        self.touch();
-    }
-
-    /// Update last activity timestamp
-    fn touch(&mut self) {
-        self.last_activity = Some(Instant::now());
     }
 
     /// Get remaining attempts before lockout

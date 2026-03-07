@@ -12,7 +12,7 @@ use super::super::app::PassmanApp;
 impl PassmanApp {
     /// Show import/export screen
     pub fn show_import_export_screen(&mut self, ui: &mut egui::Ui) {
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let header_bg = theme::header_bg_color(&current_theme);
         let frame_fill = theme::frame_fill(&current_theme);
         let border_color = theme::border_color(&current_theme);
@@ -111,7 +111,7 @@ impl PassmanApp {
                                     .set_title("Export Passwords")
                                     .add_filter(filter_name, &[extension])
                                     .add_filter("All files", &["*"])
-                                    .set_file_name(&format!("passwords_backup.{}", extension))
+                                    .set_file_name(format!("passwords_backup.{}", extension))
                                     .save_file()
                                 {
                                     self.export_file_path = path.display().to_string();

@@ -11,7 +11,7 @@ use super::super::app::PassmanApp;
 impl PassmanApp {
     /// Show add entry screen
     pub fn show_add_entry_screen(&mut self, ui: &mut egui::Ui) {
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let border_color = theme::border_color(&current_theme);
         
         // ════════════════════════════════════════════════════════════════════
@@ -156,7 +156,7 @@ impl PassmanApp {
 
     /// Show edit entry screen
     pub fn show_edit_entry_screen(&mut self, ui: &mut egui::Ui, id: &str) {
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let border_color = theme::border_color(&current_theme);
         
         // ════════════════════════════════════════════════════════════════════

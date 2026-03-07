@@ -26,8 +26,8 @@ type HmacSha256 = Hmac<Sha256>;
 /// Default vault file name.
 const DEFAULT_VAULT_FILE: &str = "vault.dat";
 
-/// Current vault file format version (v3: separate encryption and HMAC keys).
-const VAULT_FORMAT_VERSION: u8 = 3;
+/// Current vault file format version (v4: Argon2 params stored in header).
+const VAULT_FORMAT_VERSION: u8 = 4;
 
 /// Magic bytes identifying a passman vault file.
 const VAULT_MAGIC: &[u8; 4] = b"PMAN";
@@ -37,35 +37,61 @@ const VAULT_MAGIC: &[u8; 4] = b"PMAN";
 // ---------------------------------------------------------------------------
 
 /// Binary header written at the start of every v2+ vault file.
+///
+/// v2/v3 layout (9 bytes):  `[magic(4)][version(1)][salt_len(4)]`
+/// v4 layout   (21 bytes):  `[magic(4)][version(1)][salt_len(4)][argon2_memory_kb(4)][argon2_time_cost(4)][argon2_parallelism(4)]`
 #[derive(Debug)]
 struct VaultHeader {
     magic: [u8; 4],
     version: u8,
     salt_len: u32,
+    /// Argon2 params (only present in v4+; v2/v3 use config defaults)
+    argon2_memory_kb: u32,
+    argon2_time_cost: u32,
+    argon2_parallelism: u32,
 }
 
 impl VaultHeader {
-    /// Size of the serialized header in bytes.
-    const SIZE: usize = 9; // 4 (magic) + 1 (version) + 4 (salt_len)
+    /// Size of the v2/v3 header.
+    const SIZE_V3: usize = 9; // 4 (magic) + 1 (version) + 4 (salt_len)
+    /// Size of the v4 header.
+    const SIZE_V4: usize = 21; // v3 + 4*3 (argon2 params)
 
-    fn new(salt_len: u32) -> Self {
+    fn new(salt_len: u32, params: &Argon2Params) -> Self {
         Self {
             magic: *VAULT_MAGIC,
             version: VAULT_FORMAT_VERSION,
             salt_len,
+            argon2_memory_kb: params.memory_kb,
+            argon2_time_cost: params.time_cost,
+            argon2_parallelism: params.parallelism,
         }
     }
 
-    fn to_bytes(&self) -> [u8; Self::SIZE] {
-        let mut buf = [0u8; Self::SIZE];
-        buf[0..4].copy_from_slice(&self.magic);
-        buf[4] = self.version;
-        buf[5..9].copy_from_slice(&self.salt_len.to_le_bytes());
+    /// Serialized header size for this version.
+    fn wire_size(&self) -> usize {
+        if self.version >= 4 {
+            Self::SIZE_V4
+        } else {
+            Self::SIZE_V3
+        }
+    }
+
+    fn to_bytes_vec(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(Self::SIZE_V4);
+        buf.extend_from_slice(&self.magic);
+        buf.push(self.version);
+        buf.extend_from_slice(&self.salt_len.to_le_bytes());
+        if self.version >= 4 {
+            buf.extend_from_slice(&self.argon2_memory_kb.to_le_bytes());
+            buf.extend_from_slice(&self.argon2_time_cost.to_le_bytes());
+            buf.extend_from_slice(&self.argon2_parallelism.to_le_bytes());
+        }
         buf
     }
 
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < Self::SIZE {
+        if bytes.len() < Self::SIZE_V3 {
             return None;
         }
         let magic: [u8; 4] = bytes[0..4].try_into().ok()?;
@@ -74,11 +100,41 @@ impl VaultHeader {
         }
         let version = bytes[4];
         let salt_len = u32::from_le_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]);
+
+        let (argon2_memory_kb, argon2_time_cost, argon2_parallelism) = if version >= 4 {
+            if bytes.len() < Self::SIZE_V4 {
+                return None;
+            }
+            (
+                u32::from_le_bytes([bytes[9], bytes[10], bytes[11], bytes[12]]),
+                u32::from_le_bytes([bytes[13], bytes[14], bytes[15], bytes[16]]),
+                u32::from_le_bytes([bytes[17], bytes[18], bytes[19], bytes[20]]),
+            )
+        } else {
+            (0, 0, 0) // v2/v3 — will use config params
+        };
+
         Some(Self {
             magic,
             version,
             salt_len,
+            argon2_memory_kb,
+            argon2_time_cost,
+            argon2_parallelism,
         })
+    }
+
+    /// Extract Argon2 params from the header (v4+) or fall back to config.
+    fn argon2_params(&self) -> Argon2Params {
+        if self.version >= 4 {
+            Argon2Params::new(
+                self.argon2_memory_kb,
+                self.argon2_time_cost,
+                self.argon2_parallelism,
+            )
+        } else {
+            config_argon2_params()
+        }
     }
 }
 
@@ -86,14 +142,23 @@ impl VaultHeader {
 // Argon2 parameter helper
 // ---------------------------------------------------------------------------
 
-/// Build [`Argon2Params`] from the application configuration.
+/// Build [`Argon2Params`] from the application configuration,
+/// enforcing minimum security floors on all parameters.
 fn config_argon2_params() -> Argon2Params {
     let cfg = get_config();
-    Argon2Params {
+    let raw = Argon2Params {
         memory_kb: cfg.security.argon2_memory_kb,
         time_cost: cfg.security.argon2_time_cost,
         parallelism: cfg.security.argon2_parallelism,
+    };
+    if let Err(msg) = raw.validate() {
+        log::warn!("{}. Values will be clamped to minimums.", msg);
     }
+    Argon2Params::new(
+        cfg.security.argon2_memory_kb,
+        cfg.security.argon2_time_cost,
+        cfg.security.argon2_parallelism,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -103,8 +168,7 @@ fn config_argon2_params() -> Argon2Params {
 /// Manages encrypted vault files on disk.
 ///
 /// All methods are stateless — they operate directly on the file system and
-/// derive keys on-the-fly. Higher-level caching (e.g. keeping the vault in
-/// memory) is handled by [`crate::core::PassmanCore`].
+/// derive keys on-the-fly.
 pub struct VaultManager;
 
 impl VaultManager {
@@ -131,15 +195,16 @@ impl VaultManager {
         mac.verify_slice(expected).is_ok()
     }
 
-    /// Assemble a complete v3 vault file from its components.
+    /// Assemble a complete v4 vault file from its components.
     ///
-    /// Layout: `[header(9)][salt][nonce(12)][hmac(32)][ciphertext]`
+    /// Layout: `[header(21)][salt][nonce(12)][hmac(32)][ciphertext]`
     ///
     /// The serialized vault plaintext is wrapped in [`Zeroizing`] so it is
     /// automatically wiped from memory after encryption.
-    fn assemble_v3_file(
+    fn assemble_file(
         salt: &SaltString,
         vault: &Vault,
+        params: &Argon2Params,
         encryption_key: &Key,
         hmac_key: &Key,
     ) -> PassmanResult<Vec<u8>> {
@@ -147,7 +212,7 @@ impl VaultManager {
         let (ciphertext, nonce) = encrypt_data(encryption_key, &serialized)?;
 
         let salt_bytes = salt.as_str().as_bytes();
-        let header = VaultHeader::new(salt_bytes.len() as u32);
+        let header = VaultHeader::new(salt_bytes.len() as u32, params);
 
         // HMAC covers nonce || ciphertext
         let mut hmac_data = Vec::with_capacity(nonce.len() + ciphertext.len());
@@ -156,9 +221,10 @@ impl VaultManager {
         let hmac = Self::generate_hmac(hmac_key, &hmac_data);
 
         // Pre-allocate the exact output size
-        let total = VaultHeader::SIZE + salt_bytes.len() + 12 + 32 + ciphertext.len();
+        let header_bytes = header.to_bytes_vec();
+        let total = header_bytes.len() + salt_bytes.len() + 12 + 32 + ciphertext.len();
         let mut file_data = Vec::with_capacity(total);
-        file_data.extend_from_slice(&header.to_bytes());
+        file_data.extend_from_slice(&header_bytes);
         file_data.extend_from_slice(salt_bytes);
         file_data.extend_from_slice(&nonce);
         file_data.extend_from_slice(&hmac);
@@ -213,11 +279,11 @@ impl VaultManager {
 
         let vault = Vault::new();
         let file_data =
-            Self::assemble_v3_file(&salt, &vault, &key_pair.encryption_key, &key_pair.hmac_key)?;
+            Self::assemble_file(&salt, &vault, &params, &key_pair.encryption_key, &key_pair.hmac_key)?;
 
         Self::atomic_write(path, &file_data)?;
 
-        log::info!("Vault initialized (v3): {}", path);
+        log::info!("Vault initialized (v4): {}", path);
         Ok(())
     }
 
@@ -248,14 +314,14 @@ impl VaultManager {
         Self::load_legacy(master_password, path, &buffer)
     }
 
-    /// Load a v2 or v3 format vault.
+    /// Load a v2, v3, or v4 format vault.
     fn load_v2v3(
         master_password: &Zeroizing<String>,
         vault_path: &str,
         buffer: &[u8],
         header: &VaultHeader,
     ) -> PassmanResult<Vault> {
-        let mut offset = VaultHeader::SIZE;
+        let mut offset = header.wire_size();
 
         // Salt
         let salt_end = offset + header.salt_len as usize;
@@ -285,7 +351,8 @@ impl VaultManager {
         hmac_data.extend_from_slice(&nonce);
         hmac_data.extend_from_slice(ciphertext);
 
-        let params = config_argon2_params();
+        // v4: use params from header; v2/v3: use config params
+        let params = header.argon2_params();
 
         if header.version >= 3 {
             let key_pair = derive_key_pair(master_password.as_str(), &salt, &params)?;
@@ -300,7 +367,7 @@ impl VaultManager {
                 &nonce,
             )?);
             let vault: Vault = serde_json::from_slice(&plaintext)?;
-            log::info!("Vault loaded (v3): {}", vault_path);
+            log::info!("Vault loaded (v{}): {}", header.version, vault_path);
             Ok(vault)
         } else {
             // v2 backward compat — single key
@@ -313,7 +380,7 @@ impl VaultManager {
             let plaintext = Zeroizing::new(decrypt_data(&key, ciphertext, &nonce)?);
             let vault: Vault = serde_json::from_slice(&plaintext)?;
             log::warn!(
-                "Loaded v2 vault: {}. Re-save to upgrade to v3.",
+                "Loaded v2 vault: {}. Re-save to upgrade.",
                 vault_path
             );
             Ok(vault)
@@ -390,22 +457,23 @@ impl VaultManager {
         let key_pair = derive_key_pair(master_password.as_str(), &salt, &params)?;
 
         let file_data =
-            Self::assemble_v3_file(&salt, vault, &key_pair.encryption_key, &key_pair.hmac_key)?;
+            Self::assemble_file(&salt, vault, &params, &key_pair.encryption_key, &key_pair.hmac_key)?;
         Self::atomic_write(path, &file_data)?;
 
-        log::info!("Vault saved (v3): {}", path);
+        log::info!("Vault saved (v4): {}", path);
         Ok(())
     }
 
-    /// Extract the salt from an existing vault file (v1/v2/v3).
+    /// Extract the salt from an existing vault file (v1/v2/v3/v4).
     fn extract_salt(path: &str) -> PassmanResult<SaltString> {
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
 
         if let Some(header) = VaultHeader::from_bytes(&buffer) {
-            let salt_end = VaultHeader::SIZE + header.salt_len as usize;
-            let salt_str = std::str::from_utf8(&buffer[VaultHeader::SIZE..salt_end])?;
+            let offset = header.wire_size();
+            let salt_end = offset + header.salt_len as usize;
+            let salt_str = std::str::from_utf8(&buffer[offset..salt_end])?;
             SaltString::from_b64(salt_str).map_err(|e| {
                 PassmanError::Vault(VaultError::Corrupted(format!("bad salt: {}", e)))
             })
@@ -495,15 +563,16 @@ impl VaultManager {
         let params = config_argon2_params();
         let new_key_pair = derive_key_pair(new_password.as_str(), &new_salt, &params)?;
 
-        let file_data = Self::assemble_v3_file(
+        let file_data = Self::assemble_file(
             &new_salt,
             &vault,
+            &params,
             &new_key_pair.encryption_key,
             &new_key_pair.hmac_key,
         )?;
         Self::atomic_write(path, &file_data)?;
 
-        log::info!("Master password changed successfully (v3): {}", path);
+        log::info!("Master password changed successfully (v4): {}", path);
         Ok(())
     }
 }

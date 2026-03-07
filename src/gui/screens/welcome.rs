@@ -11,7 +11,7 @@ use super::super::app::PassmanApp;
 impl PassmanApp {
     /// Show welcome/home screen
     pub fn show_welcome_screen(&mut self, ui: &mut egui::Ui) {
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let muted_color = theme::muted_text_color(&current_theme);
         let frame_fill = theme::frame_fill(&current_theme);
         let border_color = theme::border_color(&current_theme);
@@ -231,7 +231,7 @@ impl PassmanApp {
 
     /// Show vault initialization screen
     pub fn show_init_screen(&mut self, ui: &mut egui::Ui) {
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let muted_color = theme::muted_text_color(&current_theme);
         let frame_fill = theme::frame_fill(&current_theme);
         let border_color = theme::border_color(&current_theme);
@@ -346,7 +346,7 @@ impl PassmanApp {
 
     /// Show login screen
     pub fn show_login_screen(&mut self, ui: &mut egui::Ui) {
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let muted_color = theme::muted_text_color(&current_theme);
         let frame_fill = theme::frame_fill(&current_theme);
         let border_color = theme::border_color(&current_theme);

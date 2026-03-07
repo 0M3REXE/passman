@@ -14,16 +14,8 @@ pub enum PassmanError {
     Vault(VaultError),
     /// Cryptographic errors
     Crypto(CryptoError),
-    /// Authentication errors
-    Auth(AuthError),
-    /// Session errors
-    Session(SessionError),
-    /// Clipboard errors
-    Clipboard(ClipboardError),
     /// Import/Export errors
     Transfer(TransferError),
-    /// Configuration errors
-    Config(ConfigError),
     /// IO errors
     Io(io::Error),
     /// Other errors
@@ -68,45 +60,6 @@ pub enum CryptoError {
     HmacVerification,
 }
 
-/// Authentication errors
-#[derive(Debug, Clone)]
-pub enum AuthError {
-    /// Invalid master password
-    InvalidPassword,
-    /// Password too weak
-    WeakPassword(String),
-    /// Passwords don't match
-    PasswordMismatch,
-    /// Account is locked out
-    LockedOut { remaining_secs: u64 },
-    /// Too many failed attempts
-    TooManyAttempts { remaining: u32 },
-}
-
-/// Session errors
-#[derive(Debug, Clone)]
-pub enum SessionError {
-    /// Session has timed out
-    TimedOut,
-    /// Session is locked
-    Locked,
-    /// No active session
-    NoSession,
-    /// Session expired
-    Expired,
-}
-
-/// Clipboard errors
-#[derive(Debug, Clone)]
-pub enum ClipboardError {
-    /// Failed to access clipboard
-    AccessFailed(String),
-    /// Failed to set clipboard content
-    SetFailed(String),
-    /// Clipboard is locked
-    Locked,
-}
-
 /// Import/Export errors
 #[derive(Debug, Clone)]
 pub enum TransferError {
@@ -122,27 +75,12 @@ pub enum TransferError {
     InvalidData(String),
 }
 
-/// Configuration errors
-#[derive(Debug, Clone)]
-pub enum ConfigError {
-    /// Config file not found
-    NotFound,
-    /// Invalid configuration
-    Invalid(String),
-    /// Failed to save config
-    SaveFailed(String),
-}
-
 impl fmt::Display for PassmanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PassmanError::Vault(e) => write!(f, "{}", e),
             PassmanError::Crypto(e) => write!(f, "{}", e),
-            PassmanError::Auth(e) => write!(f, "{}", e),
-            PassmanError::Session(e) => write!(f, "{}", e),
-            PassmanError::Clipboard(e) => write!(f, "{}", e),
             PassmanError::Transfer(e) => write!(f, "{}", e),
-            PassmanError::Config(e) => write!(f, "{}", e),
             PassmanError::Io(e) => write!(f, "IO error: {}", e),
             PassmanError::Other(msg) => write!(f, "{}", msg),
         }
@@ -177,47 +115,6 @@ impl fmt::Display for CryptoError {
     }
 }
 
-impl fmt::Display for AuthError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AuthError::InvalidPassword => write!(f, "Invalid master password."),
-            AuthError::WeakPassword(msg) => write!(f, "Password is too weak: {}", msg),
-            AuthError::PasswordMismatch => write!(f, "Passwords do not match."),
-            AuthError::LockedOut { remaining_secs } => {
-                if *remaining_secs > 60 {
-                    write!(f, "Account locked. Try again in {} minutes.", remaining_secs / 60)
-                } else {
-                    write!(f, "Account locked. Try again in {} seconds.", remaining_secs)
-                }
-            }
-            AuthError::TooManyAttempts { remaining } => {
-                write!(f, "Too many failed attempts. {} attempts remaining.", remaining)
-            }
-        }
-    }
-}
-
-impl fmt::Display for SessionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SessionError::TimedOut => write!(f, "Session timed out. Please unlock again."),
-            SessionError::Locked => write!(f, "Session is locked. Please unlock to continue."),
-            SessionError::NoSession => write!(f, "No active session. Please open a vault first."),
-            SessionError::Expired => write!(f, "Session has expired. Please re-authenticate."),
-        }
-    }
-}
-
-impl fmt::Display for ClipboardError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ClipboardError::AccessFailed(msg) => write!(f, "Cannot access clipboard: {}", msg),
-            ClipboardError::SetFailed(msg) => write!(f, "Failed to copy to clipboard: {}", msg),
-            ClipboardError::Locked => write!(f, "Clipboard is busy. Please try again."),
-        }
-    }
-}
-
 impl fmt::Display for TransferError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -226,16 +123,6 @@ impl fmt::Display for TransferError {
             TransferError::FileNotFound(path) => write!(f, "File not found: '{}'", path),
             TransferError::PermissionDenied(path) => write!(f, "Permission denied: '{}'", path),
             TransferError::InvalidData(msg) => write!(f, "Invalid data: {}", msg),
-        }
-    }
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConfigError::NotFound => write!(f, "Configuration file not found. Using defaults."),
-            ConfigError::Invalid(msg) => write!(f, "Invalid configuration: {}", msg),
-            ConfigError::SaveFailed(msg) => write!(f, "Failed to save configuration: {}", msg),
         }
     }
 }
@@ -261,33 +148,9 @@ impl From<CryptoError> for PassmanError {
     }
 }
 
-impl From<AuthError> for PassmanError {
-    fn from(err: AuthError) -> Self {
-        PassmanError::Auth(err)
-    }
-}
-
-impl From<SessionError> for PassmanError {
-    fn from(err: SessionError) -> Self {
-        PassmanError::Session(err)
-    }
-}
-
-impl From<ClipboardError> for PassmanError {
-    fn from(err: ClipboardError) -> Self {
-        PassmanError::Clipboard(err)
-    }
-}
-
 impl From<TransferError> for PassmanError {
     fn from(err: TransferError) -> Self {
         PassmanError::Transfer(err)
-    }
-}
-
-impl From<ConfigError> for PassmanError {
-    fn from(err: ConfigError) -> Self {
-        PassmanError::Config(err)
     }
 }
 
@@ -335,7 +198,17 @@ impl From<std::array::TryFromSliceError> for PassmanError {
 
 impl From<crate::security::crypto::CryptoError> for PassmanError {
     fn from(err: crate::security::crypto::CryptoError) -> Self {
-        PassmanError::Crypto(CryptoError::Decryption(err.to_string()))
+        match &err {
+            crate::security::crypto::CryptoError::KeyDerivation(msg) => {
+                PassmanError::Crypto(CryptoError::KeyDerivation(msg.clone()))
+            }
+            crate::security::crypto::CryptoError::Encryption(msg) => {
+                PassmanError::Crypto(CryptoError::Encryption(msg.clone()))
+            }
+            crate::security::crypto::CryptoError::Decryption(msg) => {
+                PassmanError::Crypto(CryptoError::Decryption(msg.clone()))
+            }
+        }
     }
 }
 

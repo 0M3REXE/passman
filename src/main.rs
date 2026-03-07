@@ -18,7 +18,6 @@ use zeroize::Zeroizing;
 // Re-export commonly used types
 pub use core::error::{PassmanError, PassmanResult};
 pub use core::config::Config;
-pub use core::{PassmanCore, EntryBuilder};
 
 
 fn main() -> Result<(), eframe::Error> {
@@ -67,10 +66,12 @@ fn main() -> Result<(), eframe::Error> {
 fn run_cli() {
     let cli = Cli::parse();
     let vault_file = cli.vault.as_deref();    let result = match cli.command {
-        Commands::Init { description: _ } => handle_init(vault_file),
-        Commands::Add { id, .. } => handle_add(&id, vault_file),
+        Commands::Init { .. } => handle_init(vault_file),
+        Commands::Add { id, username, password, note, url, generate, length } => {
+            handle_add(&id, vault_file, username, password, note, url, generate, length)
+        },
         Commands::Get { id, copy, show } => handle_get(&id, vault_file, copy, show),
-        Commands::List { search, verbose, .. } => handle_list(vault_file, search.as_deref(), verbose),
+        Commands::List { search, verbose, tag } => handle_list(vault_file, search.as_deref(), verbose, tag.as_deref()),
         Commands::Edit { id } => handle_edit(&id, vault_file),
         Commands::Remove { id, force } => handle_remove(&id, vault_file, force),
         Commands::Check { password, all } => handle_check(password.as_deref(), all, vault_file),
@@ -112,7 +113,17 @@ fn handle_init(vault_file: Option<&str>) -> PassmanResult<()> {
     Ok(())
 }
 
-fn handle_add(id: &str, vault_file: Option<&str>) -> PassmanResult<()> {
+#[allow(clippy::too_many_arguments)]
+fn handle_add(
+    id: &str,
+    vault_file: Option<&str>,
+    cli_username: Option<String>,
+    cli_password: Option<String>,
+    cli_note: Option<String>,
+    cli_url: Option<String>,
+    generate: bool,
+    gen_length: usize,
+) -> PassmanResult<()> {
     let master_password = read_password_secure("Enter master password: ")?;
     let mut vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -121,33 +132,70 @@ fn handle_add(id: &str, vault_file: Option<&str>) -> PassmanResult<()> {
     }
 
     println!("Adding new entry for '{}'", id);
-    let username = read_line("Username: ")?;
-    
-    let password_choice = read_line_optional("Generate password? (y/N): ")?;
-    let password = if password_choice.to_lowercase() == "y" || password_choice.to_lowercase() == "yes" {
-        let generated = generate_password(16);
+
+    // Username: use CLI arg or prompt interactively
+    let username = match cli_username {
+        Some(u) => u,
+        None => read_line("Username: ")?,
+    };
+
+    // Password: use CLI arg, generate, or prompt interactively
+    let password = if let Some(p) = cli_password {
+        let (strength, suggestions) = analyze_password_strength(&p);
+        println!("Password strength: {}", strength);
+        if !suggestions.is_empty() {
+            println!("Suggestions:");
+            for suggestion in &suggestions {
+                println!("  • {}", suggestion);
+            }
+        }
+        p
+    } else if generate {
+        let generated = generate_password(gen_length);
         let _ = copy_to_clipboard(&generated);
-        println!("✓ Generated password copied to clipboard ({}chars)", generated.len());
+        println!("✓ Generated password copied to clipboard ({} chars)", generated.len());
         let (strength, _) = analyze_password_strength(&generated);
         println!("Password strength: {}", strength);
         generated
     } else {
-        let pwd = read_password_secure("Password: ")?;
-        let (strength, suggestions) = analyze_password_strength(&pwd);
-        println!("Password strength: {}", strength);
-        if !suggestions.is_empty() {
-            println!("Suggestions:");
-            for suggestion in suggestions {
-                println!("  • {}", suggestion);
+        let password_choice = read_line_optional("Generate password? (y/N): ")?;
+        if password_choice.to_lowercase() == "y" || password_choice.to_lowercase() == "yes" {
+            let generated = generate_password(gen_length);
+            let _ = copy_to_clipboard(&generated);
+            println!("✓ Generated password copied to clipboard ({} chars)", generated.len());
+            let (strength, _) = analyze_password_strength(&generated);
+            println!("Password strength: {}", strength);
+            generated
+        } else {
+            let pwd = read_password_secure("Password: ")?;
+            let (strength, suggestions) = analyze_password_strength(&pwd);
+            println!("Password strength: {}", strength);
+            if !suggestions.is_empty() {
+                println!("Suggestions:");
+                for suggestion in suggestions {
+                    println!("  • {}", suggestion);
+                }
             }
+            pwd.to_string()
         }
-        pwd.to_string()
     };
 
-    let note_input = read_line_optional("Note (optional): ")?;
-    let note = if note_input.is_empty() { None } else { Some(note_input) };
+    // Note: use CLI arg or prompt interactively
+    let note = match cli_note {
+        Some(n) => if n.is_empty() { None } else { Some(n) },
+        None => {
+            let note_input = read_line_optional("Note (optional): ")?;
+            if note_input.is_empty() { None } else { Some(note_input) }
+        }
+    };
 
-    let entry = Entry::new(username, password, note);
+    let mut entry = Entry::new(username, password, note);
+
+    // URL: use CLI arg or skip
+    if let Some(url) = cli_url {
+        entry.url = Some(url);
+    }
+
     vault.add_entry(id.to_string(), entry);
 
     VaultManager::save(&vault, &master_password, vault_file)?;
@@ -170,8 +218,16 @@ fn handle_get(id: &str, vault_file: Option<&str>, copy: bool, show: bool) -> Pas
                 println!("Password: {}", "*".repeat(entry.password_str().len().min(16)));
             }
             
+            if let Some(url) = &entry.url {
+                println!("URL:      {}", url);
+            }
+            
             if let Some(note) = &entry.note {
-                println!("Note: {}", note);
+                println!("Note:     {}", note);
+            }
+            
+            if !entry.tags.is_empty() {
+                println!("Tags:     {}", entry.tags.join(", "));
             }
             
             if copy {
@@ -192,7 +248,7 @@ fn handle_get(id: &str, vault_file: Option<&str>, copy: bool, show: bool) -> Pas
     Ok(())
 }
 
-fn handle_list(vault_file: Option<&str>, search: Option<&str>, verbose: bool) -> PassmanResult<()> {
+fn handle_list(vault_file: Option<&str>, search: Option<&str>, verbose: bool, tag: Option<&str>) -> PassmanResult<()> {
     let master_password = read_password_secure("Enter master password: ")?;
     let vault = VaultManager::load(&master_password, vault_file)?;
 
@@ -204,6 +260,22 @@ fn handle_list(vault_file: Option<&str>, search: Option<&str>, verbose: bool) ->
     let mut entries: Vec<_> = vault.list_entries();
     entries.sort();
     
+    // Filter by tag if provided
+    let entries: Vec<_> = if let Some(tag_filter) = tag {
+        let tag_lower = tag_filter.to_lowercase();
+        entries.into_iter()
+            .filter(|id| {
+                if let Some(entry) = vault.get_entry(id) {
+                    entry.tags.iter().any(|t| t.to_lowercase() == tag_lower)
+                } else {
+                    false
+                }
+            })
+            .collect()
+    } else {
+        entries
+    };
+
     // Filter by search term if provided
     let filtered_entries: Vec<_> = if let Some(pattern) = search {
         let pattern_lower = pattern.to_lowercase();

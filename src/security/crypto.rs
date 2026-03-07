@@ -16,10 +16,6 @@ impl Key {
     pub fn new(data: GenericArray<u8, typenum::U32>) -> Self {
         Self(data)
     }
-    
-    pub fn as_ref(&self) -> &GenericArray<u8, typenum::U32> {
-        &self.0
-    }
 }
 
 impl AsRef<[u8]> for Key {
@@ -67,6 +63,42 @@ pub struct Argon2Params {
     pub memory_kb: u32,
     pub time_cost: u32,
     pub parallelism: u32,
+}
+
+/// Minimum Argon2 parameter values for security
+impl Argon2Params {
+    pub const MIN_MEMORY_KB: u32 = 32768;  // 32 MiB
+    pub const MIN_TIME_COST: u32 = 2;
+    pub const MIN_PARALLELISM: u32 = 1;
+
+    /// Create params with floor validation. Values below minimums are clamped up.
+    pub fn new(memory_kb: u32, time_cost: u32, parallelism: u32) -> Self {
+        Self {
+            memory_kb: memory_kb.max(Self::MIN_MEMORY_KB),
+            time_cost: time_cost.max(Self::MIN_TIME_COST),
+            parallelism: parallelism.max(Self::MIN_PARALLELISM),
+        }
+    }
+
+    /// Validate that parameters meet minimum security requirements.
+    /// Returns `Err` with a description of which params are too low.
+    pub fn validate(&self) -> Result<(), String> {
+        let mut issues = Vec::new();
+        if self.memory_kb < Self::MIN_MEMORY_KB {
+            issues.push(format!("memory_kb={} < minimum {}", self.memory_kb, Self::MIN_MEMORY_KB));
+        }
+        if self.time_cost < Self::MIN_TIME_COST {
+            issues.push(format!("time_cost={} < minimum {}", self.time_cost, Self::MIN_TIME_COST));
+        }
+        if self.parallelism < Self::MIN_PARALLELISM {
+            issues.push(format!("parallelism={} < minimum {}", self.parallelism, Self::MIN_PARALLELISM));
+        }
+        if issues.is_empty() {
+            Ok(())
+        } else {
+            Err(format!("Argon2 params below security floor: {}", issues.join(", ")))
+        }
+    }
 }
 
 impl Default for Argon2Params {
@@ -134,7 +166,7 @@ pub fn derive_key(password: &str, salt: &SaltString) -> Result<Key, CryptoError>
 }
 
 pub fn encrypt_data(key: &Key, plaintext: &[u8]) -> Result<(Vec<u8>, [u8; 12]), CryptoError> {
-    let cipher = Aes256Gcm::new(key.as_ref());
+    let cipher = Aes256Gcm::new(key);
     let nonce_bytes = rand::random::<[u8; 12]>();
     let nonce = GenericArray::from_slice(&nonce_bytes);
     let ciphertext = cipher.encrypt(nonce, plaintext)
@@ -143,7 +175,7 @@ pub fn encrypt_data(key: &Key, plaintext: &[u8]) -> Result<(Vec<u8>, [u8; 12]), 
 }
 
 pub fn decrypt_data(key: &Key, ciphertext: &[u8], nonce: &[u8; 12]) -> Result<Vec<u8>, CryptoError> {
-    let cipher = Aes256Gcm::new(key.as_ref());
+    let cipher = Aes256Gcm::new(key);
     let nonce = GenericArray::from_slice(nonce);
     cipher.decrypt(nonce, ciphertext)
         .map_err(|_e| CryptoError::Decryption("Invalid password or corrupted data".to_string()))

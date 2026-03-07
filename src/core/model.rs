@@ -56,21 +56,6 @@ impl Entry {
         }
     }
     
-    /// Create entry from already-secure password (for internal use)
-    pub fn new_secure(username: String, password: SerializableSecret, note: Option<String>) -> Self {
-        let now = chrono::Utc::now();
-        Self {
-            username,
-            password,
-            note,
-            created_at: now,
-            modified_at: now,
-            tags: Vec::new(),
-            url: None,
-            totp_secret: OptionalSecret::none(),
-        }
-    }
-    
     /// Get password as string slice (convenience method)
     /// 
     /// This explicitly exposes the secret - use with care and
@@ -79,14 +64,6 @@ impl Entry {
         self.password.expose_secret()
     }
     
-    /// Get TOTP secret as string slice if present
-    pub fn totp_secret_str(&self) -> Option<&str> {
-        self.totp_secret.expose_secret()
-    }
-    
-    pub fn update(&mut self) {
-        self.modified_at = chrono::Utc::now();
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -122,10 +99,6 @@ impl Vault {
             },
         }
     }
-    pub fn update_access_time(&mut self) {
-        self.metadata.last_accessed = chrono::Utc::now();
-    }
-
     pub fn add_entry(&mut self, id: String, entry: Entry) {
         self.entries.insert(id, entry);
     }
@@ -179,18 +152,6 @@ mod tests {
     }
     
     #[test]
-    fn test_entry_update() {
-        let mut entry = Entry::new("user".to_string(), "pass".to_string(), None);
-        let original_modified = entry.modified_at;
-        
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        entry.update();
-        
-        assert_eq!(entry.created_at, entry.created_at); // created_at unchanged
-        assert!(entry.modified_at > original_modified);
-    }
-    
-    #[test]
     fn test_vault_creation() {
         let vault = Vault::new();
         
@@ -238,18 +199,6 @@ mod tests {
         
         let entries = vault.list_entries();
         assert_eq!(entries.len(), 3);
-    }
-    
-    #[test]
-    fn test_vault_update_access_time() {
-        let mut vault = Vault::new();
-        let original_access = vault.metadata.last_accessed;
-        
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        vault.update_access_time();
-        
-        assert!(vault.metadata.last_accessed > original_access);
-        assert_eq!(vault.metadata.created_at, vault.metadata.created_at); // created_at unchanged
     }
     
     #[test]

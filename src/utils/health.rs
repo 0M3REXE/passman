@@ -17,7 +17,6 @@ pub enum PasswordHealth {
 pub struct HealthReport {
     pub entry_id: String,
     pub health: PasswordHealth,
-    pub last_changed: DateTime<Utc>,
     pub age_days: i64,
     pub strength: PasswordStrength,
     pub recommendations: Vec<String>,
@@ -138,7 +137,6 @@ impl PasswordHealthAnalyzer {
         HealthReport {
             entry_id: id.to_string(),
             health,
-            last_changed: entry.modified_at,
             age_days,
             strength,
             recommendations,
@@ -260,7 +258,6 @@ mod tests {
             HealthReport {
                 entry_id: "1".to_string(),
                 health: PasswordHealth::Excellent,
-                last_changed: Utc::now(),
                 age_days: 30,
                 strength: PasswordStrength::Strong,
                 recommendations: vec![],
@@ -268,7 +265,6 @@ mod tests {
             HealthReport {
                 entry_id: "2".to_string(),
                 health: PasswordHealth::Critical { issues: vec!["breach".to_string()] },
-                last_changed: Utc::now(),
                 age_days: 400,
                 strength: PasswordStrength::Weak,
                 recommendations: vec![],

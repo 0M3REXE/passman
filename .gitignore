@@ -9,8 +9,6 @@ src/improvements.md
 *.swp
 *.swo
 *~
-build.rs
-app-icon.rc
 
 src/two_factor.rs
 # OS generated files

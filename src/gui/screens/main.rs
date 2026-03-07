@@ -11,8 +11,8 @@ use super::super::app::PassmanApp;
 impl PassmanApp {
     /// Show main vault screen
     pub fn show_main_screen(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        // Clone theme to avoid borrow issues
-        let current_theme = self.current_theme.clone();
+        // Copy theme to avoid borrow issues
+        let current_theme = self.current_theme;
         
         // ════════════════════════════════════════════════════════════════════
         // HEADER BAR
@@ -121,14 +121,14 @@ impl PassmanApp {
             }
             
             // Clear search button
-            if !self.search_query.is_empty() {
-                if ui.add(
+            if !self.search_query.is_empty()
+                && ui.add(
                     egui::Button::new("✕")
                         .fill(egui::Color32::TRANSPARENT)
                         .stroke(egui::Stroke::NONE)
-                ).clicked() {
-                    self.search_query.clear();
-                }
+                ).clicked()
+            {
+                self.search_query.clear();
             }
             
             ui.add_space(SPACING * 2.0);
@@ -198,7 +198,7 @@ impl PassmanApp {
     /// Render a single entry card
     fn render_entry_card(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, id: &str, entry: &crate::core::model::Entry) {
         // Get all theme colors upfront to avoid borrow issues
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let frame_fill = theme::frame_fill(&current_theme);
         let border_color = theme::border_color(&current_theme);
         let muted_col = theme::muted_text_color(&current_theme);

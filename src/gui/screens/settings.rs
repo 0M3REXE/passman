@@ -12,7 +12,7 @@ use super::super::app::PassmanApp;
 impl PassmanApp {
     /// Show settings screen
     pub fn show_settings_screen(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
-        let current_theme = self.current_theme.clone();
+        let current_theme = self.current_theme;
         let muted_color = theme::muted_text_color(&current_theme);
         let frame_fill = theme::frame_fill(&current_theme);
         let border_color = theme::border_color(&current_theme);

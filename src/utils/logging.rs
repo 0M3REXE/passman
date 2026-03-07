@@ -37,16 +37,30 @@ impl Default for LogConfig {
 }
 
 impl LogConfig {
-    /// Create from config file settings
+    /// Create from config file settings.
+    ///
+    /// In release builds: console output is always off and the minimum
+    /// log level is clamped to `Warn` so that INFO/DEBUG/TRACE messages
+    /// are never emitted regardless of the config file.
     pub fn from_config() -> Self {
         let config = crate::core::config::get_config();
-        let level = match config.general.log_level.to_lowercase().as_str() {
+        let configured_level = match config.general.log_level.to_lowercase().as_str() {
             "error" => LevelFilter::Error,
             "warn" => LevelFilter::Warn,
             "info" => LevelFilter::Info,
             "debug" => LevelFilter::Debug,
             "trace" => LevelFilter::Trace,
             _ => LevelFilter::Info,
+        };
+
+        // Release builds: clamp to Warn so INFO never leaks
+        let level = if cfg!(debug_assertions) {
+            configured_level
+        } else {
+            match configured_level {
+                LevelFilter::Info | LevelFilter::Debug | LevelFilter::Trace => LevelFilter::Warn,
+                other => other,
+            }
         };
         
         let file_path = if config.general.enable_logging {
@@ -187,48 +201,6 @@ pub fn init(config: LogConfig) -> Result<(), SetLoggerError> {
 /// Initialize logger from application config
 pub fn init_from_config() -> Result<(), SetLoggerError> {
     init(LogConfig::from_config())
-}
-
-// === Logging Macros for Security-Sensitive Operations ===
-
-/// Log a security event (always logged at INFO level)
-#[macro_export]
-macro_rules! log_security {
-    ($($arg:tt)*) => {
-        log::info!(target: "security", $($arg)*)
-    };
-}
-
-/// Log a vault operation
-#[macro_export]
-macro_rules! log_vault {
-    ($($arg:tt)*) => {
-        log::debug!(target: "vault", $($arg)*)
-    };
-}
-
-/// Log a cryptographic operation (without sensitive data)
-#[macro_export]
-macro_rules! log_crypto {
-    ($($arg:tt)*) => {
-        log::debug!(target: "crypto", $($arg)*)
-    };
-}
-
-/// Log a session event
-#[macro_export]
-macro_rules! log_session {
-    ($($arg:tt)*) => {
-        log::debug!(target: "session", $($arg)*)
-    };
-}
-
-/// Log an error with context
-#[macro_export]
-macro_rules! log_error_ctx {
-    ($err:expr, $ctx:expr) => {
-        log::error!("{}: {}", $ctx, $err)
-    };
 }
 
 // === Helper Functions ===

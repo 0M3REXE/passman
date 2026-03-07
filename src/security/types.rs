@@ -12,17 +12,14 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // Re-export commonly used types from secrecy
 pub use secrecy::{ExposeSecret, SecretString};
-#[allow(unused_imports)]
-pub use secrecy::SecretBox;
 #[cfg(test)]
 use secrecy::zeroize::Zeroizing;
-#[allow(unused_imports)]
-pub use secrecy::zeroize::Zeroize;
 
 /// Wrapper for Option<SecretString> that supports serde
 #[derive(Clone)]
 pub struct OptionalSecret(Option<SecretString>);
 
+#[allow(dead_code)]
 impl OptionalSecret {
     pub fn new(value: Option<String>) -> Self {
         Self(value.map(SecretString::from))
@@ -44,18 +41,9 @@ impl OptionalSecret {
         self.0.is_none()
     }
 
-    pub fn as_ref(&self) -> Option<&SecretString> {
-        self.0.as_ref()
-    }
-
     /// Expose the secret value if present
     pub fn expose_secret(&self) -> Option<&str> {
         self.0.as_ref().map(|s| s.expose_secret())
-    }
-
-    /// Take the inner value, leaving None
-    pub fn take(&mut self) -> Option<SecretString> {
-        self.0.take()
     }
 }
 
@@ -110,10 +98,6 @@ impl SerializableSecret {
 
     pub fn expose_secret(&self) -> &str {
         self.0.expose_secret()
-    }
-
-    pub fn inner(&self) -> &SecretString {
-        &self.0
     }
 }
 
