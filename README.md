@@ -1,6 +1,6 @@
 <div align="center">
 
-**A secure password manager for Windows and Linux, built in Rust.**
+# **A secure password manager for Windows and Linux, built in Rust.**
 
 [![CI](https://github.com/0M3REXE/passman/actions/workflows/ci.yml/badge.svg)](https://github.com/0M3REXE/passman/actions/workflows/ci.yml)
 [![Release](https://github.com/0M3REXE/passman/actions/workflows/release.yml/badge.svg)](https://github.com/0M3REXE/passman/actions/workflows/release.yml)
